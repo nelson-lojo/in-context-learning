@@ -187,5 +187,5 @@ if __name__ == "__main__":
     main(args)
     import pickle
 
-    with open(os.path.join(args.out_dir, f"log.pkl", "wb")) as f:
+    with open(os.path.join(args.out_dir, f"log.pkl"), "wb") as f:
         pickle.dump(LOG, f)
