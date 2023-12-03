@@ -185,7 +185,7 @@ def relu_attn(self, query, key, value, attention_mask=None, head_mask=None):
 # used in nystrom_attn
 # iteratively finds the Moore-Penrose inverse
 # work-in-progress
-def pinv(a_s):
+def pinv(a_s, iters = 7):
     abs_x = torch.abs(a_s)
     col = abs_x.sum(dim = -1)
     row = abs_x.sum(dim = -2)
@@ -194,15 +194,16 @@ def pinv(a_s):
     current_z = a_s.transpose(-1, -2) / (torch.max(col) * torch.max(row))
     next_z = pinv_next(a_s, current_z)
 
-    while(not torch.eq(current_z, next_z)):
+    for _ in range(iters):
         current_z = next_z
         next_z = pinv_next(a_s, current_z)
     return next_z
 
 # helper function for pinv
 def pinv_next(a_s, z):
-    dim = a_s.shape[0]
-    i = torch.eye(dim)
+    dim = a_s.shape[-1]
+    identity = torch.eye(dim)
+    i = (identity.reshape(1,dim,dim)).repeat(a_s.shape[0], a_s.shape[1], 1, 1)
     inner = 7*i-torch.matmul(a_s,z)
     inner = 15 * i - torch.matmul(torch.matmul(a_s, z), inner)
     inner = 13 * i - torch.matmul(torch.matmul(a_s, z), inner)
@@ -228,7 +229,10 @@ def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, m
 
     # this was also taken from the nystrom paper, but modified
     attn1, attn2, attn3 = map(lambda t: t.softmax(dim = -1), (sim1, sim2, sim3))
-    attn2_inv = torch.linalg.pinv(attn2)
+    attn2_inv = pinv(attn2)
+    # for checking that the iterative method works
+    #print(torch.sum(attn2_inv-torch.linalg.pinv(attn2)))
+    #print(torch.max(attn2_inv))
     attn_weights = attn1 @ attn2_inv @ attn3
 
     attn_weights = attn_weights.type(value.dtype)
