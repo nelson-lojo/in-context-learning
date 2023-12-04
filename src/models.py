@@ -7,6 +7,8 @@ from sklearn.linear_model import LogisticRegression, Lasso
 import warnings
 from sklearn import tree
 import xgboost as xgb
+import math
+from einops import rearrange, reduce
 
 from base_models import NeuralNetwork, ParallelNetworks
 
@@ -24,6 +26,15 @@ def build_model(conf):
         )
     elif conf.family == "relu_attn":
         model = TransformerRelu(
+            n_dims=conf.n_dims,
+            n_positions=conf.n_positions,
+            n_embd=conf.n_embd,
+            n_layer=conf.n_layer,
+            n_head=conf.n_head,
+        )
+    elif conf.family == "nystrom":
+        ## update when done
+        model = TransformerNystrom(
             n_dims=conf.n_dims,
             n_positions=conf.n_positions,
             n_embd=conf.n_embd,
@@ -85,7 +96,6 @@ def get_relevant_baselines(task_name):
 
     models = [model_cls(**kwargs) for model_cls, kwargs in task_to_baselines[task_name]]
     return models
-
 
 class TransformerModel(nn.Module):
     def __init__(self, n_dims, n_positions, n_embd=128, n_layer=12, n_head=4):
@@ -171,6 +181,76 @@ def relu_attn(self, query, key, value, attention_mask=None, head_mask=None):
 
     return attn_output, attn_weights
 
+# used in nystrom_attn
+# iteratively finds the Moore-Penrose inverse
+# work-in-progress
+def pinv(a_s, iters = 7):
+    abs_x = torch.abs(a_s)
+    col = abs_x.sum(dim = -1)
+    row = abs_x.sum(dim = -2)
+
+    # Need to double check this initialization, doesn't seem to have right size
+    current_z = a_s.transpose(-1, -2) / (torch.max(col) * torch.max(row))
+    next_z = pinv_next(a_s, current_z)
+
+    for _ in range(iters):
+        current_z = next_z
+        next_z = pinv_next(a_s, current_z)
+    return next_z
+
+# helper function for pinv
+def pinv_next(a_s, z):
+    dim = a_s.shape[-1]
+    identity = torch.eye(dim)
+    i = (identity.reshape(1,dim,dim)).repeat(a_s.shape[0], a_s.shape[1], 1, 1)
+    inner = 7*i-torch.matmul(a_s,z)
+    inner = 15 * i - torch.matmul(torch.matmul(a_s, z), inner)
+    inner = 13 * i - torch.matmul(torch.matmul(a_s, z), inner)
+    return 1/4*torch.matmul(z, inner)
+
+# needed for landmarking in nystrom, downsamples
+def segmented_means(matrix, m):
+    dim3 = matrix.shape[-2] # we downsample the -2 dimension
+    remainder = dim3 % m
+    if (remainder > 0) :
+        padding = m - (dim3 % m)
+        matrix = nn.functional.pad(matrix, (0,0,padding,0), value = 0)
+    #pooler = nn.AvgPool2d((math.ceil(matrix.shape[-2]/m), 1))
+    #return pooler(matrix)
+    l = math.ceil(dim3/m)
+    landmark_einops_eq = '... (n l) d -> ... n d'
+    return reduce(matrix, landmark_einops_eq, 'sum', l = l)/l
+
+
+# m must be much smaller than dimension, we should probably decide on an m
+def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, iterative = False, m = 8):
+    # landmarking
+    q_bar = segmented_means(query, m)
+    k_bar = segmented_means(key, m)
+
+    # this was taken directly from the nystrom paper
+    einops_eq = '... i d, ... j d -> ... i j'
+    sim1 = torch.einsum(einops_eq, query, k_bar)
+    sim2 = torch.einsum(einops_eq, q_bar, k_bar)
+    sim3 = torch.einsum(einops_eq, q_bar, key)
+
+    # this was also taken from the nystrom paper, but modified
+    attn1, attn2, attn3 = map(lambda t: t.softmax(dim = -1), (sim1, sim2, sim3))
+    attn2_inv = 0
+    if (iterative):
+        attn2_inv = pinv(attn2)
+    else:
+        attn2_inv = torch.linalg.pinv(attn2)
+    attn_weights = attn1 @ attn2_inv @ attn3
+
+    #attn_weights = attn_weights.type(value.dtype)
+    #attn_weights = self.attn_dropout(attn_weights)
+
+    # uses weights to calculate output
+    attn_output = torch.matmul(attn_weights, value)
+    
+    return attn_output, attn_weights
+
 class TransformerRelu(TransformerModel):
     def __init__(self, *args, **kwargs):
         super(TransformerRelu, self).__init__(*args, **kwargs)
@@ -181,6 +261,20 @@ class TransformerRelu(TransformerModel):
 
         for i in range(len(attn_layers)):
             list(attn_layers[i].children())[1]._attn = relu_attn.__get__(
+                list(attn_layers[i].children())[1],
+                attn_module_class
+            )
+
+class TransformerNystrom(TransformerModel):
+    def __init__(self, *args, **kwargs):
+        super(TransformerNystrom, self).__init__(*args, **kwargs)
+
+        # Override the attention mechanism with one that replaces softmax with Nystrom approximation
+        attn_layers = list(self._backbone.children())[3]
+        attn_module_class = list(attn_layers[0].children())[1].__class__
+
+        for i in range(len(attn_layers)):
+            list(attn_layers[i].children())[1]._attn = nystrom_attn.__get__(
                 list(attn_layers[i].children())[1],
                 attn_module_class
             )
