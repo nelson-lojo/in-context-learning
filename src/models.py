@@ -8,6 +8,7 @@ import warnings
 from sklearn import tree
 import xgboost as xgb
 import math
+from einops import rearrange, reduce
 
 from base_models import NeuralNetwork, ParallelNetworks
 
@@ -214,8 +215,12 @@ def segmented_means(matrix, m):
     if (remainder > 0) :
         padding = m - (dim3 % m)
         matrix = nn.functional.pad(matrix, (0,0,padding,0), value = 0)
-    pooler = nn.AvgPool2d((math.ceil(matrix.shape[-2]/m), 1))
-    return pooler(matrix)
+    #pooler = nn.AvgPool2d((math.ceil(matrix.shape[-2]/m), 1))
+    #return pooler(matrix)
+    l = math.ceil(dim3/m)
+    landmark_einops_eq = '... (n l) d -> ... n d'
+    return reduce(matrix, landmark_einops_eq, 'sum', l = l)/l
+
 
 # m must be much smaller than dimension, we should probably decide on an m
 def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, iterative = False, m = 8):
