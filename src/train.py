@@ -156,10 +156,20 @@ def main(args):
     #     )
 
     model = build_model(args.model)
-    model.to(DEVICE)
+    model.to("cpu")
+
+    model_qat = None
+    if args.model.family == "quantized":
+        model.qconfig = torch.quantization.get_default_qat_qconfig("qnnpack")
+        model_qat = torch.quantization.prepare_qat(model, inplace = False)
+
     model.train()
 
     train(model, args)
+
+
+    if (model_qat != None):
+        model_qat = torch.quantization.convert(model_qat.eval(), inplace = False)
 
     if not args.test_run:
         _ = get_run_metrics(args.out_dir)  # precompute metrics for eval

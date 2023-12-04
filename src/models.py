@@ -30,6 +30,14 @@ def build_model(conf):
             n_layer=conf.n_layer,
             n_head=conf.n_head,
         )
+    elif conf.family == "quantized":
+        model = TransformerQuantized(
+            n_dims=conf.n_dims,
+            n_positions=conf.n_positions,
+            n_embd=conf.n_embd,
+            n_layer=conf.n_layer,
+            n_head=conf.n_head,
+        )
     else:
         raise NotImplementedError
 
@@ -184,6 +192,25 @@ class TransformerRelu(TransformerModel):
                 list(attn_layers[i].children())[1],
                 attn_module_class
             )
+
+class TransformerQuantized(TransformerModel):
+    def __init__(self, *args, **kwargs):
+        super(TransformerQuantized, self).__init__(*args, **kwargs)
+
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+        
+    def forward(self, xs, ys, inds=None):
+        xs = self.quant(xs)
+        ys = self.quant(ys)
+
+        out = super(TransformerQuantized, self).forward(xs, ys, inds)
+
+        xs = self.dequant(xs)
+        ys = self.dequant(ys)
+
+        return out
+
 
 class NNModel:
     def __init__(self, n_neighbors, weights="uniform"):

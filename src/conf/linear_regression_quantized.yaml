@@ -1,0 +1,20 @@
+inherit: 
+    - base.yaml
+
+model:
+    family: quantized
+
+training:
+    task: linear_regression
+    train_steps: 50
+    curriculum:
+        points:
+            start: 11
+            end: 41
+            inc: 2
+            interval: 2000
+
+out_dir: ../models/linear_regression_quantized
+
+wandb:
+    name: "linear_regression_standard"
