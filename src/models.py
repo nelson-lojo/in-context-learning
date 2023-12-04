@@ -8,7 +8,6 @@ import warnings
 from sklearn import tree
 import xgboost as xgb
 import math
-from torch import nn, einsum
 
 from base_models import NeuralNetwork, ParallelNetworks
 
@@ -210,29 +209,30 @@ def pinv_next(a_s, z):
     return 1/4*torch.matmul(z, inner)
 
 # needed for landmarking in nystrom, downsamples
-def segmented_means(matrix, m = 2):
+def segmented_means(matrix, p = int):
     dim3 = matrix.shape[2] #this is the dim we downsample
-    pooler = nn.AvgPool2d((math.ceil(dim3/m), 1), ceil_mode = True)
+    pooler = nn.AvgPool2d((math.ceil(dim3/p), 1), ceil_mode = True)
     return pooler(matrix)
 
 # m must be much smaller than dimension, we should probably decide on an m
-def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, m = 2):
+def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, iterative = False, m = 8):
     # landmarking
-    q_bar = segmented_means(query, m)#query[:,:,:m]
-    k_bar = segmented_means(key, m)#key[:,:,:m]
+    q_bar = segmented_means(query, m)
+    k_bar = segmented_means(key, m)
 
     # this was taken directly from the nystrom paper
     einops_eq = '... i d, ... j d -> ... i j'
-    sim1 = einsum(einops_eq, query, k_bar)
-    sim2 = einsum(einops_eq, q_bar, k_bar)
-    sim3 = einsum(einops_eq, q_bar, key)
+    sim1 = torch.einsum(einops_eq, query, k_bar)
+    sim2 = torch.einsum(einops_eq, q_bar, k_bar)
+    sim3 = torch.einsum(einops_eq, q_bar, key)
 
     # this was also taken from the nystrom paper, but modified
     attn1, attn2, attn3 = map(lambda t: t.softmax(dim = -1), (sim1, sim2, sim3))
-    attn2_inv = pinv(attn2)
-    # for checking that the iterative method works
-    #print(torch.sum(attn2_inv-torch.linalg.pinv(attn2)))
-    #print(torch.max(attn2_inv))
+    attn2_inv = 0
+    if (iterative):
+        attn2_inv = pinv(attn2)
+    else:
+        attn2_inv = torch.linalg.pinv(attn2)
     attn_weights = attn1 @ attn2_inv @ attn3
 
     attn_weights = attn_weights.type(value.dtype)
@@ -261,7 +261,7 @@ class TransformerNystrom(TransformerModel):
     def __init__(self, *args, **kwargs):
         super(TransformerNystrom, self).__init__(*args, **kwargs)
 
-        # Override the attention mechanism with one that replaces softmax with ReLU
+        # Override the attention mechanism with one that replaces softmax with Nystrom approximation
         attn_layers = list(self._backbone.children())[3]
         attn_module_class = list(attn_layers[0].children())[1].__class__
 
