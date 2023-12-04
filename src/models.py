@@ -208,9 +208,13 @@ def pinv_next(a_s, z):
     return 1/4*torch.matmul(z, inner)
 
 # needed for landmarking in nystrom, downsamples
-def segmented_means(matrix, p = int):
-    dim3 = matrix.shape[2] #this is the dim we downsample
-    pooler = nn.AvgPool2d((math.ceil(dim3/p), 1), ceil_mode = True)
+def segmented_means(matrix, m):
+    dim3 = matrix.shape[-2] # we downsample the -2 dimension
+    remainder = dim3 % m
+    if (remainder > 0) :
+        padding = m - (dim3 % m)
+        matrix = nn.functional.pad(matrix, (0,0,padding,0), value = 0)
+    pooler = nn.AvgPool2d((math.ceil(matrix.shape[-2]/m), 1))
     return pooler(matrix)
 
 # m must be much smaller than dimension, we should probably decide on an m
@@ -234,8 +238,8 @@ def nystrom_attn(self, query, key, value, attention_mask=None, head_mask=None, i
         attn2_inv = torch.linalg.pinv(attn2)
     attn_weights = attn1 @ attn2_inv @ attn3
 
-    attn_weights = attn_weights.type(value.dtype)
-    attn_weights = self.attn_dropout(attn_weights)
+    #attn_weights = attn_weights.type(value.dtype)
+    #attn_weights = self.attn_dropout(attn_weights)
 
     # uses weights to calculate output
     attn_output = torch.matmul(attn_weights, value)
