@@ -162,7 +162,7 @@ def get_timed_err_from_run(run_path: str, mutate_bs: Callable = (lambda bs: bs),
         )
         times.append(time)
 
-    return torch.mean(errs, dim=0), times
+    return torch.mean(torch.stack(errs), dim=0), times
 
 
 
