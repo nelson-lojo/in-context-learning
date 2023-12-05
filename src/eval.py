@@ -64,6 +64,9 @@ def eval_batch(model, task_sampler, xs, xs_p=None):
 
 def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs)):
     model, conf = get_model_from_run(run_path)
+    model.to(DEVICE)
+    # print(DEVICE, next(model.parameters()).device)
+    # return
 
     n_dims = conf.model.n_dims
     batch_size = mutate_bs(conf.training.batch_size)
@@ -78,13 +81,13 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
 
     task = task_sampler()
     xs = data_sampler.sample_xs(b_size=batch_size, n_points=conf.training.curriculum.points.end)
-    xs = mutate_xs(xs)
-    ys = mutate_ys(task.evaluate(xs))
+    xs = mutate_xs(xs).to(DEVICE)
+    ys = mutate_ys(task.evaluate(xs)).to(DEVICE)
     with torch.no_grad():
         pred = model(xs, ys)
 
     metric = task.get_metric()
-    loss = metric(pred, ys).numpy()
+    loss = metric(pred, ys)
 
     return loss 
 
@@ -92,14 +95,15 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
 def compute_scaling_err(run_path: str, scales: Sequence[float] = [0.5, 1.0, 2], mutate_bs: Callable = (lambda bs: bs)):
     losses = [] 
 
-    for scale in scales:
+    for scale in tqdm(scales):
         losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs))
     
-    return np.array(losses)
+    return torch.stack(losses)
 
 
 def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callable = (lambda bs: bs)) -> Tuple[np.array, float]:
     model, conf = get_model_from_run(run_path)
+    model.to(DEVICE)
     time_elapsed = 0
     sequence_count = mutate_bs(conf.training.batch_size)
 
@@ -122,7 +126,7 @@ def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callab
         return prediction[:, ::2, 0][:, inds]  # predict only on xs
 
     data_sampler = get_data_sampler(conf.training.data, conf.model.n_dims)
-    xs = data_sampler.sample_xs(b_size=sequence_count, n_points=num_examples+1)
+    xs = data_sampler.sample_xs(b_size=sequence_count, n_points=num_examples+1).to(DEVICE)
 
     task_sampler = get_task_sampler(
         conf.training.task,
@@ -131,7 +135,7 @@ def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callab
         **conf.training.task_kwargs
     )
     sampled_tasks = task_sampler()
-    ys = sampled_tasks.evaluate(xs)
+    ys = sampled_tasks.evaluate(xs).to(DEVICE)
 
     # overwrite the forward method with our timed one
     model.forward = timed_forward.__get__(
@@ -143,7 +147,7 @@ def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callab
         pred = model(xs, ys)
 
     metric = sampled_tasks.get_metric()
-    loss = metric(pred, ys).numpy()
+    loss = metric(pred, ys)
 
     return loss, time_elapsed / sequence_count
 
@@ -154,11 +158,11 @@ def get_timed_err_from_run(run_path: str, mutate_bs: Callable = (lambda bs: bs),
     for _ in trange(runs):
         loss, time = time_model_from_run_path(run_path, num_examples=40, mutate_bs=mutate_bs)
         errs.append(
-            loss.mean(axis=0)# - least_sq_loss[0].cpu().numpy()
+            loss.mean(dim=0)# - least_sq_loss[0].cpu().numpy()
         )
         times.append(time)
 
-    return np.mean(errs, axis=0), times
+    return torch.mean(errs, dim=0), times
 
 
 
