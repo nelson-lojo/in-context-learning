@@ -24,9 +24,6 @@ def get_model_from_run(run_path, step=-1, only_conf=False):
         return None, conf
 
     model = models.build_model(conf.model)
-    
-    # if quantized:
-    #     model = torch.ao.quantization.convert(model)
 
     if step == -1:
         state_path = os.path.join(run_path, "state.pt")
@@ -65,7 +62,7 @@ def eval_batch(model, task_sampler, xs, xs_p=None):
     return metrics
 
 
-def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs), runs: int = 1, desc: Optional[str] = None, ic_examples: Optional[int] = None):
+def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs), runs: int = 1, show_bar: bool = True, ic_examples: Optional[int] = None):
     model, conf = get_model_from_run(run_path)
     model.to(DEVICE)
     # print(DEVICE, next(model.parameters()).device)
@@ -75,7 +72,7 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
     batch_size = mutate_bs(conf.training.batch_size)
 
     losses = []
-    for _ in trange(runs, desc=("Running batches" if desc is None else desc)):
+    for _ in trange(runs, desc="Running batches") if show_bar else range(runs):
         data_sampler = get_data_sampler(conf.training.data, n_dims)
         task_sampler = get_task_sampler(
             conf.training.task,
@@ -101,8 +98,8 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
 def compute_scaling_err(run_path: str, scales: Sequence[float] = [0.5, 1.0, 2], mutate_bs: Callable = (lambda bs: bs), runs: int = 1, ic_examples: Optional[int] = None):
     losses = [] 
 
-    for scale in scales: #tqdm(scales, desc="Scales computed", position=-1):
-        losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs, runs=runs, desc=f"Scaling {scale:.3f} batches", ic_examples=ic_examples))
+    for scale in tqdm(scales, desc="Scales computed"):
+        losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs, runs=runs, show_bar=False, ic_examples=ic_examples))
     
     return torch.stack(losses).cpu()
 
