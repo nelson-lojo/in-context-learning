@@ -8,7 +8,7 @@ import pandas as pd
 from tqdm import tqdm, trange
 import torch
 import yaml
-from typing import Callable, Sequence, Tuple, List
+from typing import Callable, Sequence, Tuple, List, Optional
 from time import perf_counter
 
 import models
@@ -24,6 +24,9 @@ def get_model_from_run(run_path, step=-1, only_conf=False):
         return None, conf
 
     model = models.build_model(conf.model)
+    
+    # if quantized:
+    #     model = torch.ao.quantization.convert(model)
 
     if step == -1:
         state_path = os.path.join(run_path, "state.pt")
@@ -62,7 +65,7 @@ def eval_batch(model, task_sampler, xs, xs_p=None):
     return metrics
 
 
-def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs)):
+def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs), runs: int = 1, desc: Optional[str] = None, ic_examples: Optional[int] = None):
     model, conf = get_model_from_run(run_path)
     model.to(DEVICE)
     # print(DEVICE, next(model.parameters()).device)
@@ -71,34 +74,37 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
     n_dims = conf.model.n_dims
     batch_size = mutate_bs(conf.training.batch_size)
 
-    data_sampler = get_data_sampler(conf.training.data, n_dims)
-    task_sampler = get_task_sampler(
-        conf.training.task,
-        n_dims,
-        batch_size,
-        **conf.training.task_kwargs
-    )
+    losses = []
+    for _ in trange(runs, desc=("Running batches" if desc is None else desc)):
+        data_sampler = get_data_sampler(conf.training.data, n_dims)
+        task_sampler = get_task_sampler(
+            conf.training.task,
+            n_dims,
+            batch_size,
+            **conf.training.task_kwargs
+        )
 
-    task = task_sampler()
-    xs = data_sampler.sample_xs(b_size=batch_size, n_points=conf.training.curriculum.points.end)
-    xs = mutate_xs(xs).to(DEVICE)
-    ys = mutate_ys(task.evaluate(xs)).to(DEVICE)
-    with torch.no_grad():
-        pred = model(xs, ys)
+        task = task_sampler()
+        points = conf.training.curriculum.points.end if ic_examples is None else ic_examples
+        xs = data_sampler.sample_xs(b_size=batch_size, n_points=points)
+        xs = mutate_xs(xs).to(DEVICE)
+        ys = mutate_ys(task.evaluate(xs)).to(DEVICE)
+        with torch.no_grad():
+            pred = model(xs, ys)
 
-    metric = task.get_metric()
-    loss = metric(pred, ys)
+        metric = task.get_metric()
+        losses.append(metric(pred, ys).cpu())
 
-    return loss 
+    return torch.stack(losses).mean(dim=0).cpu()
 
 
-def compute_scaling_err(run_path: str, scales: Sequence[float] = [0.5, 1.0, 2], mutate_bs: Callable = (lambda bs: bs)):
+def compute_scaling_err(run_path: str, scales: Sequence[float] = [0.5, 1.0, 2], mutate_bs: Callable = (lambda bs: bs), runs: int = 1, ic_examples: Optional[int] = None):
     losses = [] 
 
-    for scale in tqdm(scales):
-        losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs))
+    for scale in scales: #tqdm(scales, desc="Scales computed", position=-1):
+        losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs, runs=runs, desc=f"Scaling {scale:.3f} batches", ic_examples=ic_examples))
     
-    return torch.stack(losses)
+    return torch.stack(losses).cpu()
 
 
 def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callable = (lambda bs: bs)) -> Tuple[np.array, float]:
@@ -147,7 +153,7 @@ def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callab
         pred = model(xs, ys)
 
     metric = sampled_tasks.get_metric()
-    loss = metric(pred, ys)
+    loss = metric(pred, ys).cpu()
 
     return loss, time_elapsed / sequence_count
 
@@ -155,14 +161,14 @@ def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callab
 def get_timed_err_from_run(run_path: str, mutate_bs: Callable = (lambda bs: bs), runs: int = 1) -> Tuple[np.array, List[float]]:
     times = []
     errs = []
-    for _ in trange(runs):
+    for _ in trange(runs, desc="Timing runs"):
         loss, time = time_model_from_run_path(run_path, num_examples=40, mutate_bs=mutate_bs)
         errs.append(
-            loss.mean(dim=0)# - least_sq_loss[0].cpu().numpy()
+            loss.mean(dim=0).cpu()
         )
         times.append(time)
 
-    return torch.mean(torch.stack(errs), dim=0), times
+    return torch.mean(torch.stack(errs), dim=0).cpu(), times
 
 
 
