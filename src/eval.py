@@ -5,9 +5,11 @@ import sys
 from munch import Munch
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import torch
 import yaml
+from typing import Callable, Sequence, Tuple, List, Optional
+from time import perf_counter
 
 import models
 from samplers import get_data_sampler, sample_transformation
@@ -25,11 +27,11 @@ def get_model_from_run(run_path, step=-1, only_conf=False):
 
     if step == -1:
         state_path = os.path.join(run_path, "state.pt")
-        state = torch.load(state_path)
+        state = torch.load(state_path, map_location=DEVICE)
         model.load_state_dict(state["model_state_dict"])
     else:
         model_path = os.path.join(run_path, f"model_{step}.pt")
-        state_dict = torch.load(model_path)
+        state_dict = torch.load(model_path, map_location=DEVICE)
         model.load_state_dict(state_dict)
 
     return model, conf
@@ -58,6 +60,113 @@ def eval_batch(model, task_sampler, xs, xs_p=None):
             metrics[:, i] = task.get_metric()(pred.cpu(), ys)[:, i]
 
     return metrics
+
+
+def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutate_ys: Callable = (lambda ys: ys), mutate_bs: Callable = (lambda bs: bs), runs: int = 1, show_bar: bool = True, ic_examples: Optional[int] = None):
+    model, conf = get_model_from_run(run_path)
+    model.to(DEVICE)
+    # print(DEVICE, next(model.parameters()).device)
+    # return
+
+    n_dims = conf.model.n_dims
+    batch_size = mutate_bs(conf.training.batch_size)
+
+    losses = []
+    for _ in trange(runs, desc="Running batches") if show_bar else range(runs):
+        data_sampler = get_data_sampler(conf.training.data, n_dims)
+        task_sampler = get_task_sampler(
+            conf.training.task,
+            n_dims,
+            batch_size,
+            **conf.training.task_kwargs
+        )
+
+        task = task_sampler()
+        points = conf.training.curriculum.points.end if ic_examples is None else ic_examples
+        xs = data_sampler.sample_xs(b_size=batch_size, n_points=points)
+        xs = mutate_xs(xs).to(DEVICE)
+        ys = mutate_ys(task.evaluate(xs)).to(DEVICE)
+        with torch.no_grad():
+            pred = model(xs, ys)
+
+        metric = task.get_metric()
+        losses.append(metric(pred, ys).cpu())
+
+    return torch.stack(losses).mean(dim=0).cpu()
+
+
+def compute_scaling_err(run_path: str, scales: Sequence[float] = [0.5, 1.0, 2], mutate_bs: Callable = (lambda bs: bs), runs: int = 1, ic_examples: Optional[int] = None):
+    losses = [] 
+
+    for scale in tqdm(scales, desc="Scales computed"):
+        losses.append(get_err_from_run(run_path, mutate_xs=(lambda xs: xs*scale), mutate_bs=mutate_bs, runs=runs, show_bar=False, ic_examples=ic_examples))
+    
+    return torch.stack(losses).cpu()
+
+
+def time_model_from_run_path(run_path: str, num_examples: int, mutate_bs: Callable = (lambda bs: bs)) -> Tuple[np.array, float]:
+    model, conf = get_model_from_run(run_path)
+    model.to(DEVICE)
+    time_elapsed = 0
+    sequence_count = mutate_bs(conf.training.batch_size)
+
+    def timed_forward(self, xs, ys, inds=None):
+        if inds is None:
+            inds = torch.arange(ys.shape[1])
+        else:
+            inds = torch.tensor(inds)
+            if max(inds) >= ys.shape[1] or min(inds) < 0:
+                raise ValueError("inds contain indices where xs and ys are not defined")
+        zs = self._combine(xs, ys)
+
+        nonlocal time_elapsed
+        time_start = perf_counter()
+        embeds = self._read_in(zs)
+        output = self._backbone(inputs_embeds=embeds).last_hidden_state
+        prediction = self._read_out(output)
+        time_elapsed = perf_counter() - time_start
+
+        return prediction[:, ::2, 0][:, inds]  # predict only on xs
+
+    data_sampler = get_data_sampler(conf.training.data, conf.model.n_dims)
+    xs = data_sampler.sample_xs(b_size=sequence_count, n_points=num_examples+1).to(DEVICE)
+
+    task_sampler = get_task_sampler(
+        conf.training.task,
+        conf.model.n_dims,
+        sequence_count,
+        **conf.training.task_kwargs
+    )
+    sampled_tasks = task_sampler()
+    ys = sampled_tasks.evaluate(xs).to(DEVICE)
+
+    # overwrite the forward method with our timed one
+    model.forward = timed_forward.__get__(
+        model,
+        model.__class__
+    )
+
+    with torch.no_grad():
+        pred = model(xs, ys)
+
+    metric = sampled_tasks.get_metric()
+    loss = metric(pred, ys).cpu()
+
+    return loss, time_elapsed / sequence_count
+
+
+def get_timed_err_from_run(run_path: str, mutate_bs: Callable = (lambda bs: bs), runs: int = 1) -> Tuple[np.array, List[float]]:
+    times = []
+    errs = []
+    for _ in trange(runs, desc="Timing runs"):
+        loss, time = time_model_from_run_path(run_path, num_examples=40, mutate_bs=mutate_bs)
+        errs.append(
+            loss.mean(dim=0).cpu()
+        )
+        times.append(time)
+
+    return torch.mean(torch.stack(errs), dim=0).cpu(), times
+
 
 
 # Functions for generating different kinds of train/test data
@@ -325,6 +434,8 @@ def conf_to_model_name(conf):
             (6, 4): "Transformer-small",
             (12, 8): "Transformer",
         }[(conf.model.n_layer, conf.model.n_head)]
+    if conf.model.family == "relu_attn":
+        return "Transformer-ReLU"
     else:
         return conf.wandb.name
 
