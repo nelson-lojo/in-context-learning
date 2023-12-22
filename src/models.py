@@ -12,26 +12,28 @@ from base_models import NeuralNetwork, ParallelNetworks
 
 from consts import DEVICE
 
+def throw(ex):
+    raise ex
 
 def build_model(conf):
-    if conf.family == "gpt2":
-        model = TransformerModel(
-            n_dims=conf.n_dims,
-            n_positions=conf.n_positions,
-            n_embd=conf.n_embd,
-            n_layer=conf.n_layer,
-            n_head=conf.n_head,
+    cls = {
+        "gpt2" : TransformerModel,
+        "relu_attn" : TransformerRelu,
+        "relu_attn_causal" : TransformerReluCausal,
+    }.get(
+        conf.family,
+        lambda *_, **__: throw(
+            NotImplementedError(f"Invalid model family!: '{conf.family}'")
         )
-    elif conf.family == "relu_attn":
-        model = TransformerRelu(
-            n_dims=conf.n_dims,
-            n_positions=conf.n_positions,
-            n_embd=conf.n_embd,
-            n_layer=conf.n_layer,
-            n_head=conf.n_head,
-        )
-    else:
-        raise NotImplementedError
+    )
+
+    model = cls(
+        n_dims=conf.n_dims,
+        n_positions=conf.n_positions,
+        n_embd=conf.n_embd,
+        n_layer=conf.n_layer,
+        n_head=conf.n_head,
+    )
 
     return model
 
@@ -157,7 +159,6 @@ def relu_attn(self, query, key, value, attention_mask=None, head_mask=None):
         # Apply the attention mask
         attn_weights = attn_weights + attention_mask
 
-    # TODO: make this sequence length causal (divide by tokens seen so far, not total tokens in sequence)
     attn_weights = nn.functional.relu(attn_weights) / query.size(-2) 
 
     # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
@@ -172,19 +173,66 @@ def relu_attn(self, query, key, value, attention_mask=None, head_mask=None):
 
     return attn_output, attn_weights
 
-class TransformerRelu(TransformerModel):
-    def __init__(self, *args, **kwargs):
-        super(TransformerRelu, self).__init__(*args, **kwargs)
+def relu_attn_causal(self, query, key, value, attention_mask=None, head_mask=None):
+    attn_weights = torch.matmul(query, key.transpose(-1, -2))
+
+    if self.scale_attn_weights:
+        attn_weights = attn_weights / (value.size(-1) ** 0.5)
+
+    # Layer-wise attention scaling
+    if self.scale_attn_by_inverse_layer_idx:
+        attn_weights = attn_weights / float(self.layer_idx + 1)
+
+    if not self.is_cross_attention:
+        # if only "normal" attention layer implements causal mask
+        query_length, key_length = query.size(-2), key.size(-2)
+        causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length].bool()
+        attn_weights = torch.where(causal_mask, attn_weights, self.masked_bias.to(attn_weights.dtype))
+
+    if attention_mask is not None:
+        # Apply the attention mask
+        attn_weights = attn_weights + attention_mask
+
+    # TODO: make this sequence length causal (divide by tokens seen so far, not total tokens in sequence)
+    relud = nn.functional.relu(attn_weights)
+    attn_weights = nn.functional.relu(attn_weights) / query.size(-2) 
+    import code
+    code.interact(local=locals())
+
+    # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
+    attn_weights = attn_weights.type(value.dtype)
+    attn_weights = self.attn_dropout(attn_weights)
+
+    # Mask heads if we want to
+    if head_mask is not None:
+        attn_weights = attn_weights * head_mask
+
+    attn_output = torch.matmul(attn_weights, value)
+
+    return attn_output, attn_weights
+
+
+class TransformerCustomAttn(TransformerModel):
+    def __init__(self, *args, new_attn_func=relu_attn, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
 
         # Override the attention mechanism with one that replaces softmax with ReLU
         attn_layers = list(self._backbone.children())[3]
         attn_module_class = list(attn_layers[0].children())[1].__class__
 
         for i in range(len(attn_layers)):
-            list(attn_layers[i].children())[1]._attn = relu_attn.__get__(
+            list(attn_layers[i].children())[1]._attn = new_attn_func.__get__(
                 list(attn_layers[i].children())[1],
                 attn_module_class
             )
+
+class TransformerRelu(TransformerCustomAttn):
+    def __init__(self, *args, **kwargs):
+        super(TransformerRelu, self).__init__(*args, new_attn_func=relu_attn, **kwargs)
+
+class TransformerReluCausal(TransformerCustomAttn):
+    def __init__(self, *args, **kwargs):
+        super(TransformerRelu, self).__init__(*args, new_attn_func=relu_attn_causal, **kwargs)
 
 class NNModel:
     def __init__(self, n_neighbors, weights="uniform"):
