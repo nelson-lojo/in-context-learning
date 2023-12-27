@@ -196,7 +196,7 @@ def relu_attn_causal(self, query, key, value, attention_mask=None, head_mask=Non
     # TODO: make this sequence length causal (divide by tokens seen so far, not total tokens in sequence)
     # relud = nn.functional.relu(attn_weights)
     seq_len = query.size(-2)
-    causal_seq_len = torch.arange(seq_len).expand(attn_weights.shape).transpose(-1, -2)
+    causal_seq_len = torch.arange(seq_len, device=DEVICE).expand(attn_weights.shape).transpose(-1, -2)
     # import code
     # assert attn_weights.shape == causal_seq_len.shape, code.interact(local=locals(), banner=f"Failed shape check: attn_weights do not math causal_seq_len in shape! \n{attn_weights.shape} vs {causal_seq_len.shape}")
     # pre_attn_weights = attn_weights
