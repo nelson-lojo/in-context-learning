@@ -194,10 +194,14 @@ def relu_attn_causal(self, query, key, value, attention_mask=None, head_mask=Non
         attn_weights = attn_weights + attention_mask
 
     # TODO: make this sequence length causal (divide by tokens seen so far, not total tokens in sequence)
-    relud = nn.functional.relu(attn_weights)
-    attn_weights = nn.functional.relu(attn_weights) / query.size(-2) 
-    import code
-    code.interact(local=locals())
+    # relud = nn.functional.relu(attn_weights)
+    seq_len = query.size(-2)
+    causal_seq_len = torch.arange(seq_len).expand(attn_weights.shape).transpose(-1, -2)
+    # import code
+    # assert attn_weights.shape == causal_seq_len.shape, code.interact(local=locals(), banner=f"Failed shape check: attn_weights do not math causal_seq_len in shape! \n{attn_weights.shape} vs {causal_seq_len.shape}")
+    # pre_attn_weights = attn_weights
+    attn_weights = nn.functional.relu(attn_weights) / causal_seq_len
+    # code.interact(local=locals(), banner="yeesh")
 
     # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
     attn_weights = attn_weights.type(value.dtype)
@@ -214,7 +218,7 @@ def relu_attn_causal(self, query, key, value, attention_mask=None, head_mask=Non
 
 class TransformerCustomAttn(TransformerModel):
     def __init__(self, *args, new_attn_func=relu_attn, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
+        super(TransformerCustomAttn, self).__init__(*args, **kwargs)
 
         # Override the attention mechanism with one that replaces softmax with ReLU
         attn_layers = list(self._backbone.children())[3]
@@ -232,7 +236,7 @@ class TransformerRelu(TransformerCustomAttn):
 
 class TransformerReluCausal(TransformerCustomAttn):
     def __init__(self, *args, **kwargs):
-        super(TransformerRelu, self).__init__(*args, new_attn_func=relu_attn_causal, **kwargs)
+        super(TransformerReluCausal, self).__init__(*args, new_attn_func=relu_attn_causal, **kwargs)
 
 class NNModel:
     def __init__(self, n_neighbors, weights="uniform"):
