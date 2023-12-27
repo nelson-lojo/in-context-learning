@@ -25,5 +25,9 @@ You can start by cloning the repo and following the steps below.
 
 ## Additional Info
 
-- You can find our (original) proposal at [`reports/proposal.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf) and our initial submission at [`reports/draft_1.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf)
-- We are working on getting this code to run on Kaggle and Colab (update: Kaggle works!)
+- Written work:
+    - You can find our (original) proposal at [`reports/proposal.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf) 
+    - Our initial submission at [`reports/draft_1.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf)
+    - Our final report at [`reports/final_report.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/final_report.pdf)
+- To run training on Google Colab or Kaggle, load the corresponding notebook in [`src/training_notebooks/`](https://github.com/nelson-lojo/in-context-learning/blob/main/src/training_notebooks/)
+    - Do note that full training took us approximately 30 hours per task for "non-causal" ReLU-attn training on a P4 GPU, so you may run into problems on preemptible platforms
