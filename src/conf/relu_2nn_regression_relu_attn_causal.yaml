@@ -2,10 +2,10 @@ inherit:
     - base.yaml
 
 model:
-    family: relu_attn
+    family: relu_attn_causal
 
 training:
-    resume_id: relu_attn
+    resume_id: relu_attn_causal
     task: relu_2nn_regression
     task_kwargs: {"hidden_layer_size": 100}
     curriculum:

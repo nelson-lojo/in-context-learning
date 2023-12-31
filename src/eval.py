@@ -436,6 +436,8 @@ def conf_to_model_name(conf):
         }[(conf.model.n_layer, conf.model.n_head)]
     if conf.model.family == "relu_attn":
         return "Transformer-ReLU"
+    if conf.model.family == "relu_attn_causal":
+        return "Transformer-ReLU-causal"
     else:
         return conf.wandb.name
 

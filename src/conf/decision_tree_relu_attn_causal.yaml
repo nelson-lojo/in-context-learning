@@ -2,10 +2,10 @@ inherit:
     - base.yaml
 
 model:
-    family: relu_attn
+    family: relu_attn_causal
 
 training:
-    resume_id: relu_attn
+    resume_id: relu_attn_causal
     task: decision_tree
     task_kwargs: {"depth": 4}
     curriculum:
