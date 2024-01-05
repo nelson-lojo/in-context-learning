@@ -1,5 +1,6 @@
 import json
 import os
+import gc
 import sys
 
 from munch import Munch
@@ -92,6 +93,7 @@ def get_err_from_run(run_path: str, mutate_xs: Callable = (lambda xs: xs), mutat
         metric = task.get_metric()
         losses.append(metric(pred, ys).cpu())
 
+    model = model.cpu()
     return torch.stack(losses).mean(dim=0).cpu()
 
 
@@ -164,6 +166,9 @@ def get_timed_err_from_run(run_path: str, mutate_bs: Callable = (lambda bs: bs),
             loss.mean(dim=0).cpu()
         )
         times.append(time)
+        
+        gc.collect()
+        torch.cuda.empty_cache()
 
     return torch.mean(torch.stack(errs), dim=0).cpu(), times
 
@@ -439,6 +444,7 @@ def conf_to_model_name(conf):
     if conf.model.family == "relu_attn_causal":
         return "Transformer-ReLU-causal"
     else:
+        print(f"defaulting on: {conf.model.family}")
         return conf.wandb.name
 
 
