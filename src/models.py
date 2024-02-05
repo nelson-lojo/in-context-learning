@@ -7,6 +7,7 @@ from sklearn.linear_model import LogisticRegression, Lasso
 import warnings
 from sklearn import tree
 import xgboost as xgb
+from microformer import MicroFormer
 
 from base_models import NeuralNetwork, ParallelNetworks
 
@@ -20,6 +21,7 @@ def build_model(conf):
         "gpt2" : TransformerModel,
         "relu_attn" : TransformerRelu,
         "relu_attn_causal" : TransformerReluCausal,
+        "micro" : MicroFormer
     }.get(
         conf.family,
         lambda *_, **__: throw(
