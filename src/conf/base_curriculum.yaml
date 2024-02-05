@@ -1,0 +1,7 @@
+training:
+    curriculum:
+        dims:
+            start: 5
+            end: 20
+            inc: 1
+            interval: 2000
