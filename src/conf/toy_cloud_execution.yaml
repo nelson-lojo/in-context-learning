@@ -1,5 +1,7 @@
 inherit: 
     - models/standard.yaml
+    - base_train.yaml
+    - tasks/linear_regression.yaml
     - wandb.yaml
 
 model:
@@ -7,14 +9,6 @@ model:
     n_positions: 11
 
 training:
-    task: linear_regression
-    data: gaussian
-    task_kwargs: {}
-    batch_size: 64
-    learning_rate: 0.0001
-    save_every_steps: 1000
-    keep_every_steps: 1000
-    train_steps: 5001
     curriculum:
         dims:
             start: 5
@@ -27,7 +21,7 @@ training:
             inc: 2
             interval: 2000
 
-out_dir: ../models/linear_regression
+out_dir: ../models/toy
 
 wandb:
     name: "linear_regression_toy"

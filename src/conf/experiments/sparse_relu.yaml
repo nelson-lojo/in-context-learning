@@ -1,0 +1,11 @@
+inherit:
+    - models/standard_relu.yaml
+    - tasks/sparse_linear_regression.yaml
+    - base_train.yaml
+    - base_curriculum.yaml
+
+training:
+    resume_id: pretrained_relu
+
+wandb:
+    name: "sparse_linear_standard_relu"

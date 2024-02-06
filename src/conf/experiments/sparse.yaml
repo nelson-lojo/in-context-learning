@@ -1,11 +1,11 @@
 inherit:
-    - models/micro.yaml
+    - models/standard.yaml
     - tasks/sparse_linear_regression.yaml
     - base_train.yaml
     - base_curriculum.yaml
 
 training:
-    resume_id: pretrained_micro
+    resume_id: pretrained
 
 wandb:
-    name: "sparse_linear_micro"
+    name: "sparse_linear_standard"

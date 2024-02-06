@@ -5,7 +5,7 @@ inherit:
     - base_curriculum.yaml
 
 training:
-    resume_id: relu_attn_causal
+    resume_id: pretrained_relu_causal
 
 wandb:
     name: "decision_tree_standard_relu_causal"
