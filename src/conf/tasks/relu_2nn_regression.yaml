@@ -1,5 +1,5 @@
 inherit: 
-    - wandb.yaml
+    - ../wandb.yaml
 
 training:
     task: relu_2nn_regression

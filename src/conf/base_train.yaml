@@ -1,3 +1,7 @@
+model:
+    n_dims: 20
+    n_positions: 101
+
 training:
     data: gaussian
     batch_size: 64

@@ -1,8 +1,8 @@
 inherit:
-    - models/standard_relu_causal.yaml
-    - tasks/decision_tree.yaml
-    - base_train.yaml
-    - base_curriculum.yaml
+    - ../models/standard_relu_causal.yaml
+    - ../tasks/decision_tree.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
 
 training:
     resume_id: pretrained_relu_causal

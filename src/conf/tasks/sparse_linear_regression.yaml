@@ -1,5 +1,5 @@
 inherit: 
-    - wandb.yaml
+    - ../wandb.yaml
 
 training:
     task: sparse_linear_regression
