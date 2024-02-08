@@ -19,9 +19,9 @@ You can start by cloning the repo and following the steps below.
 
     ```
     cd src/
-    python train.py --config conf/any-config_relu_attn.yml
+    python train.py --config conf/any-task_relu_attn.yml
     ```
-    Note: we have only implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper
+    Note: We have implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper *and* with `L` (as described in the paper) equal to the number of tokens seen at a given sequence index (i.e. `index+1`).
 
 ## Additional Info
 
@@ -31,3 +31,4 @@ You can start by cloning the repo and following the steps below.
     - Our final report at [`reports/final_report.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/final_report.pdf)
 - To run training on Google Colab or Kaggle, load the corresponding notebook in [`src/training_notebooks/`](https://github.com/nelson-lojo/in-context-learning/blob/main/src/training_notebooks/)
     - Do note that full training took us approximately 30 hours per task for "non-causal" ReLU-attn training on a P4 GPU, so you may run into problems on preemptible platforms
+- All fully trained model weights are available at [this link](https://drive.google.com/file/d/1i40FeNi5K0UzOH7I5wp32vBKCELSc8PD/view?usp=sharing)
