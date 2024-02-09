@@ -1,11 +1,7 @@
 inherit: 
-    - base.yaml
-
-model:
-    family: relu_attn_causal
+    - ../wandb.yaml
 
 training:
-    resume_id: relu_attn_causal
     task: sparse_linear_regression
     task_kwargs: {"sparsity": 3}
     curriculum:

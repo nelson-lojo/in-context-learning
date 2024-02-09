@@ -1,0 +1,11 @@
+inherit:
+    - ../models/standard.yaml
+    - ../tasks/decision_tree.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: pretrained
+
+wandb:
+    name: "decision_tree_standard"
