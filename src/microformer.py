@@ -5,15 +5,6 @@ from torch import nn
 DTYPE = torch.float32
 DEVICE= "cpu"
 
-def count_parameters(model: nn.Module):
-    params_by_layer = [
-        torch.prod(torch.tensor(p.shape)) 
-        for p in model.parameters()
-    ]
-    return sum(params_by_layer)
-
-def get_causal_mask(length: int):
-    return nn.Transformer.generate_square_subsequent_mask(length)
 
 class MicroFormer(nn.Module):
 
@@ -94,8 +85,10 @@ class MicroFormerLayer(nn.Module):
         skip1 = x
         activation = self.pre_attn_norm(skip1)
         activation = self.pre_attn_map(activation)
+
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(seq_len)
         # this call below is based on <>._sa_block() visible at https://pytorch.org/docs/stable/_modules/torch/nn/modules/transformer.html#TransformerDecoderLayer
-        activation, _ = self.attn(activation, activation, activation, need_weights=False, attn_mask=get_causal_mask(seq_len))#, is_causal=True) # when upgrading to torch 2.0, replace attn_mask=... with is_causal=...
+        activation, _ = self.attn(activation, activation, activation, need_weights=False, attn_mask=causal_mask)#, is_causal=True) # when upgrading to torch 2.0, replace attn_mask=... with is_causal=...
         # also I don't know why <MultiheadAttention>.forward() returns a tuple with None in the only other (second) slot
         activation += skip1
 
@@ -104,47 +97,6 @@ class MicroFormerLayer(nn.Module):
         activation = self.mlp(activation)
         return activation + skip2
 
-
-# this may be replaced by nn.MultiheadAttention
-"""
-class MyAttention(nn.Module):
-    def __init__(self, dim, qk_dim=None, heads=1):
-        super(MyAttention, self).__init__()
-        if qk_dim is None:
-            qk_dim = dim
-
-        self.qk_dim = qk_dim
-        self.query = [ nn.Linear(dim, qk_dim) for _ in range(heads) ]
-        self.key   = [ nn.Linear(dim, qk_dim) for _ in range(heads) ]
-        self.value = [ nn.Linear(dim, dim)    for _ in range(heads) ]
-
-    def forward(self, x):
-        b_size, seq_len, embed_dim = x.shape
-        # x is the normalized input embedding
-        query = self.query(x)
-        key = self.key(x)
-        value = self.value(x)
-
-        assert query.shape == (b_size, seq_len, self.qk_dim)
-        assert key.shape   == (b_size, seq_len, self.qk_dim)
-        assert value.shape == (b_size, seq_len, embed_dim)
-
-        ## TODO: this line may be optimized to halve the # of matmuls
-        attn_weights = torch.matmul(query, key.transpose(-1, -2)) # Q * K.T
-        assert attn_weights.shape == (b_size, seq_len, seq_len)
-        attn_weights = attn_weights / (value.size(-1)**0.5) # divide by sqrt(d)
-        assert attn_weights.shape == (b_size, seq_len, seq_len)
-
-        # TODO: where are the heads coming in?
-        if causal := True:
-            mask = get_causal_mask(seq_len)
-            attn_weights = torch.matmul(attn_weights, mask)
-            ## TODO: check dims
-        
-        result = torch.matmul(attn_weights, value)
-
-        return result#, attn_weights ## TODO: why do they also return the attn_weights?
-"""
         
 class RMSLayerNorm(nn.Module):
     def __init__(self):

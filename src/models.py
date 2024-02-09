@@ -16,6 +16,13 @@ from consts import DEVICE
 def throw(ex):
     raise ex
 
+def count_parameters(model: nn.Module):
+    params_by_layer = [
+        torch.prod(torch.tensor(p.shape)) 
+        for p in model.parameters()
+    ]
+    return sum(params_by_layer)
+
 def build_model(conf):
     cls = {
         "gpt2" : TransformerModel,
