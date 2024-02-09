@@ -3,7 +3,6 @@ from torch import nn
 
 
 DTYPE = torch.float32
-DEVICE= "cpu"
 
 
 class MicroFormer(nn.Module):
