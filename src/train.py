@@ -55,14 +55,18 @@ def train(model, args):
 
     n_dims = model.n_dims
     bsize = args.training.batch_size
+    #FIXME
+    bsize = 1
     data_sampler = get_data_sampler(args.training.data, n_dims=n_dims)
     task_sampler = get_task_sampler(
         args.training.task,
         n_dims,
         bsize,
         num_tasks=args.training.num_tasks,
+        curriculum=curriculum,
         **args.training.task_kwargs,
     )
+    print(args.training.task)
     pbar = tqdm(range(starting_step, args.training.train_steps))
 
     num_training_examples = args.training.num_training_examples
@@ -85,7 +89,9 @@ def train(model, args):
             curriculum.n_dims_truncated,
             **data_sampler_args,
         )
+
         task = task_sampler(**task_sampler_args)
+        print ("ULTRA SHAPE: " + str(xs.size()))
         ys = task.evaluate(xs)
 
         loss_func = task.get_training_metric()
