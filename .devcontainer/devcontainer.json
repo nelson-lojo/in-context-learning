@@ -9,5 +9,7 @@
                 "ms-azuretools.vscode-docker"
             ]
         }
-    }
+    },
+
+    "onCreateCommand" : "conda env create -f environment.yml"
 }
