@@ -1,6 +1,9 @@
 {
-  "image": "mcr.microsoft.com/vscode/devcontainers/anaconda:3",
-  "customizations": {
+    "image": "mcr.microsoft.com/vscode/devcontainers/anaconda:3",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker": {}
+    },
+    "customizations": {
         "vscode": {
             "extensions": [
                 "ms-python.python",
@@ -11,5 +14,5 @@
         }
     },
 
-    "onCreateCommand" : "conda env create -f environment.yml"
+    "onCreateCommand" : "docker system prune -fa && conda env create -f environment.yml && echo 'source /opt/conda/bin/activate in-context-learning' > ~/.bashrc"
 }
