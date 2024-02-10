@@ -342,3 +342,92 @@ class DecisionTree(Task):
     @staticmethod
     def get_training_metric():
         return mean_squared_error
+
+class KalmanFilter(Task):
+    def __init__(
+        self,
+        n_dims,
+        batch_size,
+        pool_dict=None,
+        seeds=None,
+        scale=1,
+        hidden_layer_size=100,
+    ):
+        """scale: a constant by which to scale the randomly sampled weights."""
+        super(KalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
+        self.scale = scale
+        self.hidden_layer_size = hidden_layer_size
+
+        if pool_dict is None and seeds is None:
+            self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
+            self.B = torch.randn(self.b_size, self.n_dims, 1)
+            self.C = torch.randn(self.b_size, self.hidden_layer_size, self.n_dims)
+            self.x_k_1 = torch.randn(self.b_size, self.n_dims, 1)
+        elif seeds is not None:
+            self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
+            self.B = torch.randn(self.b_size, self.n_dims, 1)
+            self.C = torch.randn(self.b_size, self.hidden_layer_size, self.n_dims)
+            self.x_k_1 = torch.randn(self.b_size, self.n_dims, 1)
+            generator = torch.Generator()
+            assert len(seeds) == self.b_size
+            for i, seed in enumerate(seeds):
+                generator.manual_seed(seed)
+
+                self.A[i] = torch.randn(self.n_dims, self.n_dims, generator=generator)
+                self.B[i] = torch.randn(self.n_dims, 1, generator=generator)
+                self.C[i] = torch.randn(self.hidden_layer_size, self.n_dims, generator=generator)
+                self.x_k_1[i] = torch.randn(self.n_dims, 1, generator=generator)
+        else:
+            assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_k_1" in pool_dict
+            assert len(pool_dict["A"]) == len(pool_dict["B"]) == len(pool_dict["C"]) == len(pool_dict["x_k_1"])
+            indices = torch.randperm(len(pool_dict["A"]))[:batch_size]
+            self.A = pool_dict["A"][indices]
+            self.B = pool_dict["B"][indices]
+            self.C = pool_dict["C"][indices]
+            self.x_k_1 = pool_dict["x_k_1"][indices]
+
+
+    #Unsure if there's some normalization I must do 
+    #How would batch size work in this case?
+    def evaluate(self, u_k):
+        # I do not know what this does
+        A = self.A.to(u_k.device)
+        B = self.B.to(u_k.device)
+        C = self.C.to(u_k.device)
+        x_k_1 = self.x_k_1.to(u_k.device)
+        # Renormalize to Linear Regression Scale
+        x_k_1 = A @ x_k_1 + B @ u_k
+        y_k = C @ x_k_1
+
+        #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
+        y_k = y_k[:, :, 0]
+
+        #FIXME: is this sort of normalization even necessary????
+        #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
+        y_k = self.scale * y_k
+        return y_k
+
+    # Assume that we are instantiating A, B, and C matrices for the following
+    # state space model: 
+    #
+    #           x_k = A * x_(k-1) + B * u_k
+    #           y_k = C * x_k
+    #
+    # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
+    # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
+    @staticmethod
+    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=4, **kwargs):
+        return {
+            "A": torch.randn(num_tasks, n_dims, n_dims),
+            "B": torch.randn(num_tasks, n_dims, 1),
+            "C": torch.randn(num_tasks, hidden_layer_size, n_dims),
+            "x_k_1": torch.randn(num_tasks, n_dims, 1)
+        }
+
+    @staticmethod
+    def get_metric():
+        return squared_error
+
+    @staticmethod
+    def get_training_metric():
+        return mean_squared_error
