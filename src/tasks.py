@@ -60,6 +60,7 @@ def get_task_sampler(
         "quadratic_regression": QuadraticRegression,
         "relu_2nn_regression": Relu2nnRegression,
         "decision_tree": DecisionTree,
+        "kalman_filter": KalmanFilter
     }
     if task_name in task_names_to_classes:
         task_cls = task_names_to_classes[task_name]
