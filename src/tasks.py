@@ -373,26 +373,27 @@ class KalmanFilter(Task):
         self.scale = scale
         self.hidden_layer_size = hidden_layer_size
         self.curriculum = curriculum
+    
         #print(self.curriculum.n_points)
         if pool_dict is None and seeds is None:
             self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.B = torch.randn(self.b_size, self.n_dims, self.curriculum.n_points)
-            self.C = torch.randn(self.b_size, self.curriculum.n_points, self.n_dims)
-            self.x_k_1 = torch.randn(self.b_size, self.n_dims, 1)
+            self.B = torch.randn(self.b_size, self.n_dims, self.n_dims)
+            self.C = torch.randn(self.b_size, 1, self.n_dims)
+            self.x_k_1 = torch.randn(self.b_size, 1, self.n_dims)
         elif seeds is not None:
             self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.B = torch.randn(self.b_size, self.n_dims, self.curriculum.n_points)
-            self.C = torch.randn(self.b_size, self.curriculum.n_points, self.n_dims)
-            self.x_k_1 = torch.randn(self.b_size, self.n_dims, 1)
+            self.B = torch.randn(self.b_size, self.n_dims, self.n_dims)
+            self.C = torch.randn(self.b_size, 1, self.n_dims)
+            self.x_k_1 = torch.randn(self.b_size, 1, self.n_dims)
             generator = torch.Generator()
             assert len(seeds) == self.b_size
             for i, seed in enumerate(seeds):
                 generator.manual_seed(seed)
 
                 self.A[i] = torch.randn(self.n_dims, self.n_dims, generator=generator)
-                self.B[i] = torch.randn(self.n_dims, self.curriculum.n_points, generator=generator)
-                self.C[i] = torch.randn(self.curriculum.n_points, self.n_dims, generator=generator)
-                self.x_k_1[i] = torch.randn(self.n_dims, 1, generator=generator)
+                self.B[i] = torch.randn(self.n_dims, self.n_dims, generator=generator)
+                self.C[i] = torch.randn(1, self.n_dims, generator=generator)
+                self.x_k_1[i] = torch.randn(1, self.n_dims, generator=generator)
         else:
             assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_k_1" in pool_dict
             assert len(pool_dict["A"]) == len(pool_dict["B"]) == len(pool_dict["C"]) == len(pool_dict["x_k_1"])
@@ -432,16 +433,39 @@ class KalmanFilter(Task):
         #print("x_k_1 type: " + str(type(x_k_1)))
         #print(x_k_1)
         #print("\n\n\n\n\n\n\n")
-        print(u_k.size())
-        print((A @ x_k_1).size())
-        print((B @ u_k).size())
-        x_k_1 = A @ x_k_1 + B @ u_k
-        y_k =  C @ x_k_1
-        print(B.size())
-        print(C.size())
-        print("y_k type: " + str(y_k.size()))
+       # print("THESE ARE MY INPUTS")
+       # print("\n\n\n\n\n\n\n\n")
+       # print(u_k)
+       # print("\n\n\n\n\n\n\n\n")
+
+        x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
+        x_k_all[:, 0, :] = x_k_1
+        #print(x_k_all)
+        for i in range(u_k.size()[1] - 1):
+            #print(x_k_all[:, i, :].size())
+            #print(A.size())
+            #print( u_k[:, i + 1, :].size())
+            #print(B.size())
+            #print((x_k_all[:, i, :] @ A).size())
+            #print((u_k[:, i + 1, :] @ B).size())
+            x_k_all[:, i+1, :] = x_k_all[:, i, :] @ A + u_k[:, i + 1, :] @ B
+        
+        #print("\n\n\n\n\n\n\n\n")
+        #print(x_k_all)
+        ##print("AFTER FOR LOOP")
+        #print(x_k_all.size())
+        #print(C.size())
+        y_k = C @ torch.transpose(x_k_all, 1, 2)
+        y_k = torch.transpose(y_k, 1, 2)
+        #print(u_k.size())
+        #print((A @ x_k_1).size())
+        #print((B @ u_k).size())
+        #x_k_1 = A @ x_k_1 + B @ u_k
+        #y_k =  C @ x_k_1
+        #print(B.size())
+        #print(C.size())
+        #print("y_k type: " + str(y_k.size()))
         #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
-        y_k = y_k[:, :, 0]
 
         #FIXME: is this sort of normalization even necessary????
         #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
@@ -462,9 +486,9 @@ class KalmanFilter(Task):
     def generate_pool_dict(n_dims, num_tasks, curriculum=None, hidden_layer_size=100, **kwargs):
         return {
             "A": torch.randn(num_tasks, n_dims, n_dims),
-            "B": torch.randn(num_tasks, n_dims, curriculum.n_points),
-            "C": torch.randn(num_tasks, curriculum.n_points, n_dims),
-            "x_k_1": torch.randn(num_tasks, n_dims, 1)
+            "B": torch.randn(num_tasks, n_dims, n_dims),
+            "C": torch.randn(num_tasks, 1, n_dims),
+            "x_k_1": torch.randn(num_tasks, 1, n_dims)
         }
 
     @staticmethod
