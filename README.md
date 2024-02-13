@@ -6,22 +6,41 @@ Paper: http://arxiv.org/abs/2208.01066 <br><br>
 
 
 ## Getting started
-You can start by cloning the repo and following the steps below.
 
-1. Install the dependencies for our code using Conda. You may need to adjust the environment YAML file depending on your setup. *(we did not)*
+<details>
+    <summary><h3>Local Environment</h3></summary>
+To get started with this codebase:
+
+1) Clone the repo  
+
+2) Install the dependencies for our code using Conda. You may need to adjust the environment YAML file depending on your setup (alternatively, you can use a Codespace (described below)).  
 
     ```
     conda env create -f environment.yml
     conda activate in-context-learning
     ```
+</details>
 
-2. Start training with:
+<details>
+<summary><h3>Codespaces (new!)</h3></summary>
+Click <a href="https://github.com/codespaces/new?hide_repo_select=true&ref=devcontainer-improvement&repo=724878312">this link</a> and step through the configurator or start a <a href="https://github.com/features/codespaces">codespace</a> directly from this repo. That's it -- dependencies will be automatically installed and you will be dropped in your default codespace editor.
+
+Note: If the conda environment is not automatically activated, you may need to run 
+
+    ```
+    source /opt/conda/bin/activate in-context-learning
+    ```
+</details>
+
+### Training
+
+You can start training with:
 
     ```
     cd src/
-    python train.py --config conf/any-task_relu_attn.yml
+    python train.py --config conf/experiments/any-task_relu.yml
     ```
-    Note: We have implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper *and* with `L` (as described in the paper) equal to the number of tokens seen at a given sequence index (i.e. `index+1`).
+Note: We have implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper *and* with `L` (as described in the paper) equal to the number of tokens seen at a given sequence index (i.e. `index+1`).
 
 ## Additional Info
 
@@ -29,6 +48,7 @@ You can start by cloning the repo and following the steps below.
     - You can find our (original) proposal at [`reports/proposal.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf) 
     - Our initial submission at [`reports/draft_1.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/proposal.pdf)
     - Our final report at [`reports/final_report.pdf`](https://github.com/nelson-lojo/in-context-learning/blob/main/reports/final_report.pdf)
-- To run training on Google Colab or Kaggle, load the corresponding notebook in [`src/training_notebooks/`](https://github.com/nelson-lojo/in-context-learning/blob/main/src/training_notebooks/)
+- ~~To run training on Google Colab or Kaggle, load the corresponding notebook in [`src/training_notebooks/`](https://github.com/nelson-lojo/in-context-learning/blob/main/src/training_notebooks/)~~
     - Do note that full training took us approximately 30 hours per task for "non-causal" ReLU-attn training on a P4 GPU, so you may run into problems on preemptible platforms
+    - This is currently not supported due to large codebase changes
 - All fully trained model weights are available at [this link](https://drive.google.com/file/d/1i40FeNi5K0UzOH7I5wp32vBKCELSc8PD/view?usp=sharing)
