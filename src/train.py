@@ -55,8 +55,6 @@ def train(model, args):
 
     n_dims = model.n_dims
     bsize = args.training.batch_size
-    #FIXME
-    bsize = 1
     data_sampler = get_data_sampler(args.training.data, n_dims=n_dims)
     task_sampler = get_task_sampler(
         args.training.task,

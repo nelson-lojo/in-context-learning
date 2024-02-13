@@ -8,6 +8,8 @@ def squared_error(ys_pred, ys):
 
 
 def mean_squared_error(ys_pred, ys):
+    #print("ys_pred: " + str(ys_pred.size()))
+    #print("ys: " + str(ys.size()))
     return (ys - ys_pred).square().mean()
 
 
@@ -68,9 +70,9 @@ def get_task_sampler(
         if num_tasks is not None:
             if pool_dict is not None:
                 raise ValueError("Either pool_dict or num_tasks should be None.")
-            print(task_name == "kalman_filter")
+            #print(task_name == "kalman_filter")
             if task_name == "kalman_filter":
-                print(curriculum)
+                #print(curriculum)
                 pool_dict = KalmanFilter.generate_pool_dict(n_dims, num_tasks, curriculum=curriculum, **kwargs)
                 return lambda **args: KalmanFilter(n_dims, batch_size, curriculum, pool_dict=pool_dict, **args, **kwargs)
             else:    
@@ -101,7 +103,7 @@ class LinearRegression(Task):
             indices = torch.randperm(len(pool_dict["w"]))[:batch_size]
             self.w_b = pool_dict["w"][indices]
 
-    def evaluate(self, xs_b):
+    def evaluate(self, xs_b): # (bs, seq_len, x_dim)
         w_b = self.w_b.to(xs_b.device)
         ys_b = self.scale * (xs_b @ w_b)[:, :, 0]
         return ys_b
@@ -376,24 +378,24 @@ class KalmanFilter(Task):
     
         #print(self.curriculum.n_points)
         if pool_dict is None and seeds is None:
-            self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.B = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.C = torch.randn(self.b_size, 1, self.n_dims)
-            self.x_k_1 = torch.randn(self.b_size, 1, self.n_dims)
+            self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
+            self.B = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
+            self.C = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
+            self.x_k_1 = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
         elif seeds is not None:
-            self.A = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.B = torch.randn(self.b_size, self.n_dims, self.n_dims)
-            self.C = torch.randn(self.b_size, 1, self.n_dims)
-            self.x_k_1 = torch.randn(self.b_size, 1, self.n_dims)
+            self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
+            self.B = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
+            self.C = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
+            self.x_k_1 = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
             generator = torch.Generator()
             assert len(seeds) == self.b_size
             for i, seed in enumerate(seeds):
                 generator.manual_seed(seed)
 
-                self.A[i] = torch.randn(self.n_dims, self.n_dims, generator=generator)
-                self.B[i] = torch.randn(self.n_dims, self.n_dims, generator=generator)
-                self.C[i] = torch.randn(1, self.n_dims, generator=generator)
-                self.x_k_1[i] = torch.randn(1, self.n_dims, generator=generator)
+                self.A[i] = KalmanFilter.generate_rand_stable(self.n_dims, self.n_dims, generator=generator)
+                self.B[i] = KalmanFilter.generate_rand_stable(self.n_dims, self.n_dims, generator=generator)
+                self.C[i] = KalmanFilter.generate_rand_stable(1, self.n_dims, generator=generator)
+                self.x_k_1[i] = KalmanFilter.generate_rand_stable(1, self.n_dims, generator=generator)
         else:
             assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_k_1" in pool_dict
             assert len(pool_dict["A"]) == len(pool_dict["B"]) == len(pool_dict["C"]) == len(pool_dict["x_k_1"])
@@ -435,20 +437,22 @@ class KalmanFilter(Task):
         #print("\n\n\n\n\n\n\n")
        # print("THESE ARE MY INPUTS")
        # print("\n\n\n\n\n\n\n\n")
-       # print(u_k)
+        #print(u_k)
        # print("\n\n\n\n\n\n\n\n")
+        #print(u_k.size())
+        
 
         x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
-        x_k_all[:, 0, :] = x_k_1
+        x_k_all[:, 0, :] = x_k_1[:, 0, :]
         #print(x_k_all)
         for i in range(u_k.size()[1] - 1):
-            #print(x_k_all[:, i, :].size())
+            #print(x_k_all[:, i:(i+1), :].size())
             #print(A.size())
-            #print( u_k[:, i + 1, :].size())
+            #print( u_k[:, (i + 1):(i + 2), :].size())
             #print(B.size())
-            #print((x_k_all[:, i, :] @ A).size())
-            #print((u_k[:, i + 1, :] @ B).size())
-            x_k_all[:, i+1, :] = x_k_all[:, i, :] @ A + u_k[:, i + 1, :] @ B
+            #print((x_k_all[:, i:(i+1), :] @ A).size())
+            #print((u_k[:, (i + 1):(i+2), :] @ B).size())
+            x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B
         
         #print("\n\n\n\n\n\n\n\n")
         #print(x_k_all)
@@ -472,8 +476,30 @@ class KalmanFilter(Task):
 
         #FIXME: UNCOMMENT THE SCALING
         #y_k = self.scale * y_k
-        return y_k
+        return y_k[:, :, 0]
 
+    @staticmethod
+    def generate_rand_stable(batch_size, rows, cols, generator=None):
+        ans = torch.zeros(batch_size, rows, cols)
+        for i in range(batch_size):
+            e_vals = torch.rand(min(rows, cols), generator=generator)
+            e_val_signs = torch.rand(min(rows, cols), generator=generator)
+            for i in range(len(e_vals)):
+                e_vals[i] *= -1 if (e_val_signs[i] < 0.5) else 1
+        
+            gaus = torch.randn (rows, rows, generator=generator)
+            svd = torch.linalg.svd (gaus)   
+            orth1 = svd[0] @ svd[2]
+            orth1 = orth1[:, :min(rows, cols)]
+
+            gaus = torch.randn (cols, cols, generator=generator)
+            svd = torch.linalg.svd (gaus)   
+            orth2 = svd[0] @ svd[2]
+            orth2 = orth2[:min(rows, cols), :]
+
+            ans[i] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
+        return ans
+    
     # Assume that we are instantiating A, B, and C matrices for the following
     # state space model: 
     #
@@ -485,11 +511,12 @@ class KalmanFilter(Task):
     @staticmethod
     def generate_pool_dict(n_dims, num_tasks, curriculum=None, hidden_layer_size=100, **kwargs):
         return {
-            "A": torch.randn(num_tasks, n_dims, n_dims),
-            "B": torch.randn(num_tasks, n_dims, n_dims),
-            "C": torch.randn(num_tasks, 1, n_dims),
-            "x_k_1": torch.randn(num_tasks, 1, n_dims)
+            "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
+            "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
+            "C": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims),
+            "x_k_1": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims)
         }
+
 
     @staticmethod
     def get_metric():
