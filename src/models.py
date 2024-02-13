@@ -240,6 +240,48 @@ class TransformerReluCausal(TransformerCustomAttn):
     def __init__(self, *args, **kwargs):
         super(TransformerReluCausal, self).__init__(*args, new_attn_func=relu_attn_causal, **kwargs)
 
+
+class MLPModel(nn.Module):
+
+    def __init__(self, x_length = 1, contextexamples = 2, activation=(lambda: nn.ReLU()), dimensions: list = [2, 2, 2]):
+
+        super(MLPModel, self).__init__()
+
+        dimensions[0] = (x_length + 1) * contextexamples + x_length
+        layers = []
+        last_dim = dimensions[0]
+        for dim in dimensions[1:]:
+            layers.append(
+                nn.Linear(last_dim, dim, dtype=DTYPE)
+            )
+            last_dim = dim
+            layers.append(activation())
+
+        layers = layers[:-1]  # remove the extra activation
+
+        self.net = nn.Sequential(*layers)
+
+
+    @staticmethod
+    def _combine(xs_b, ys_b):
+        """Interleaves the x's and the y's into a single sequence."""
+        bsize, points, dim = xs_b.shape
+        ys_b_wide = torch.cat(
+            (
+                ys_b.view(bsize, points, 1),
+                torch.zeros(bsize, points, dim - 1, device=ys_b.device),
+            ),
+            axis=2,
+        )
+        zs = torch.stack((xs_b, ys_b_wide), dim=2)
+        zs = zs.view(bsize, 2 * points, dim)
+        return zs
+
+    def forward(self, xs, ys, inds=None):
+        input = self._combine(xs, ys)
+        return self.net(input)
+
+
 class NNModel:
     def __init__(self, n_neighbors, weights="uniform"):
         # should we be picking k optimally
@@ -595,43 +637,3 @@ class XGBoostModel:
             preds.append(pred)
 
         return torch.stack(preds, dim=1)
-
-class MLPModel(nn.Module):
-
-    def __init__(self, x_length = 1, contextexamples = 2, activation=(lambda: nn.ReLU()), dimensions: list = [2, 2, 2]):
-
-        super(MLPModel, self).__init__()
-
-        dimensions[0] = (x_length + 1) * contextexamples + x_length
-        layers = []
-        last_dim = dimensions[0]
-        for dim in dimensions[1:]:
-            layers.append(
-                nn.Linear(last_dim, dim, dtype=DTYPE)
-            )
-            last_dim = dim
-            layers.append(activation())
-
-        layers = layers[:-1]  # remove the extra activation
-
-        self.net = nn.Sequential(*layers)
-
-
-    @staticmethod
-    def _combine(xs_b, ys_b):
-        """Interleaves the x's and the y's into a single sequence."""
-        bsize, points, dim = xs_b.shape
-        ys_b_wide = torch.cat(
-            (
-                ys_b.view(bsize, points, 1),
-                torch.zeros(bsize, points, dim - 1, device=ys_b.device),
-            ),
-            axis=2,
-        )
-        zs = torch.stack((xs_b, ys_b_wide), dim=2)
-        zs = zs.view(bsize, 2 * points, dim)
-        return zs
-
-    def forward(self, xs, ys, inds=None):
-        input = self._combine(xs, ys)
-        return self.net(input)
