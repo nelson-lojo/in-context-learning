@@ -242,7 +242,6 @@ class TransformerReluCausal(TransformerCustomAttn):
     def __init__(self, *args, **kwargs):
         super(TransformerReluCausal, self).__init__(*args, new_attn_func=relu_attn_causal, **kwargs)
 
-
 class NNModel:
     def __init__(self, n_neighbors, weights="uniform"):
         # should we be picking k optimally
