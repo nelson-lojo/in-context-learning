@@ -1,8 +1,9 @@
 inherit: 
-    - base.yaml
+    - ../wandb.yaml
 
 training:
     task: linear_regression
+    task_kwargs: {}
     curriculum:
         points:
             start: 11

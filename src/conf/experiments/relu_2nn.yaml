@@ -1,0 +1,11 @@
+inherit:
+    - ../models/standard.yaml
+    - ../tasks/relu_2nn_regression.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: pretrained
+
+wandb:
+    name: "relu_2nn_regression_standard"
