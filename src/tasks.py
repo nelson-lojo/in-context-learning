@@ -62,7 +62,8 @@ def get_task_sampler(
         "quadratic_regression": QuadraticRegression,
         "relu_2nn_regression": Relu2nnRegression,
         "decision_tree": DecisionTree,
-        "kalman_filter": KalmanFilter
+        "kalman_filter": KalmanFilter,
+        "noisy_kalman_filter": NoisyKalmanFilter
     }
     print(curriculum)
     if task_name in task_names_to_classes:
@@ -487,6 +488,175 @@ class KalmanFilter(Task):
         #FIXME: is this sort of normalization even necessary????
         #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
 
+        #BELOW IS THE SCALING
+        y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
+        return y_k[:, :, 0]
+
+    @staticmethod
+    def generate_rand_stable(batch_size, rows, cols, generator=None):
+        ans = torch.zeros(batch_size, rows, cols)
+        #print("THIS IS THE GEN BATCH" + str(batch_size))
+        #print([i for i in range(batch_size)])
+    
+        for i in range(batch_size):
+            #print(i)
+            #print("\n\n\n\n\n")
+            e_vals = torch.rand(min(rows, cols), generator=generator)
+            e_val_signs = torch.rand(min(rows, cols), generator=generator)
+            for j in range(len(e_vals)):
+                e_vals[j] *= -1 if (e_val_signs[j] < 0.5) else 1
+        
+            gaus = torch.randn (rows, rows, generator=generator)
+            svd = torch.linalg.svd (gaus)   
+            orth1 = svd[0]
+            orth1 = orth1[:, :min(rows, cols)]
+            #print("THIS IS ORTH 1")
+            #print(orth1)
+
+            gaus = torch.randn (cols, cols, generator=generator)
+            svd = torch.linalg.svd (gaus)   
+            orth2 = svd[2]
+            orth2 = orth2[:min(rows, cols), :]
+            #print("THIS IS ORTH 2")
+            #print(orth2)
+
+            #print("NOOOOOOOOOOOOOOOO")
+            #print(torch.matmul(orth1, torch.diag(e_vals)))
+
+            #print("MUJHE TERRE LULLI")
+            #print(torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2))
+            ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
+            #print(i)
+            #print("\n\n\n\n\n")
+            #print(ans[i, :, :])
+
+        #print("IN GENERATING")
+        #print(ans)
+        return ans
+    
+    # Assume that we are instantiating A, B, and C matrices for the following
+    # state space model: 
+    #
+    #           x_k = A * x_(k-1) + B * u_k
+    #           y_k = C * x_k
+    #
+    # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
+    # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
+    @staticmethod
+    def generate_pool_dict(n_dims, num_tasks, curriculum=None, hidden_layer_size=100, **kwargs):
+        return {
+            "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
+            "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
+            "C": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims),
+            "x_k_1": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims)
+        }
+
+
+    @staticmethod
+    def get_metric():
+        return squared_error
+
+    @staticmethod
+    def get_training_metric():
+        return mean_squared_error
+
+class NoisyKalmanFilter(KalmanFilter):
+    def __init__(
+        self,
+        n_dims,
+        batch_size,
+        curriculum,
+        pool_dict=None,
+        seeds=None,
+        scale=1,
+        hidden_layer_size=100,
+    ):
+        """scale: a constant by which to scale the randomly sampled weights."""
+        super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, curriculum, pool_dict, seeds)
+        self.scale = scale
+        self.hidden_layer_size = hidden_layer_size
+        self.curriculum = curriculum
+    
+
+
+    #Unsure if there's some normalization I must do 
+    #How would batch size work in this case?
+    def evaluate(self, u_k):
+
+        A = self.A.to(u_k.device)
+        
+        B = self.B.to(u_k.device)
+        
+        C = self.C.to(u_k.device)
+        
+        x_k_1 = self.x_k_1.to(u_k.device)
+        # Renormalize to Linear Regression Scale
+
+        #print("A type: " + str(type(A)))
+        #print(A)
+        #print("B type: " + str(type(B)))
+        #print(B)
+        ##print("C type: " + str(type(C)))
+        #print(C)
+        ##print("u_k type: " + str(type(u_k)))
+        #print(u_k)
+        #print("x_k_1 type: " + str(type(x_k_1)))
+        #print(x_k_1)
+        #print("\n\n\n\n\n\n\n")
+       # print("THESE ARE MY INPUTS")
+       # print("\n\n\n\n\n\n\n\n")
+        #print(u_k)
+       # print("\n\n\n\n\n\n\n\n")
+        #print(u_k.size())
+        
+
+        x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
+        x_k_all[:, 0, :] = x_k_1[:, 0, :]
+        #print(x_k_all)
+        for i in range(u_k.size()[1] - 1):
+            #print(x_k_all[:, i:(i+1), :].size())
+            #print(A.size())
+            #print( u_k[:, (i + 1):(i + 2), :].size())
+            #print(B.size())
+            #print((x_k_all[:, i:(i+1), :] @ A).size())
+            #print((u_k[:, (i + 1):(i+2), :] @ B).size())
+            #print("THISSSSSSSSSSSSS")
+            #print(x_k_all[:, i:(i + 1), :])
+            #print("PART2")
+           #print(A)
+            #print(x_k_all[:, i:(i + 1), :] @ A)
+            #print("THATTTTTTTTTTTTT")
+            #print(u_k[:, (i + 1):(i + 2), :])
+            #print("part 2")
+            #print(B)
+            x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B + (torch.randn (u_k.size()[0], 1, u_k.size()[2]) / 5)
+        
+        #print("\n\n\n\n\n\n\n\n")
+        #print(x_k_all)
+        ##print("AFTER FOR LOOP")
+        #print(x_k_all.size())
+        #print(C.size())
+        y_k = C @ torch.transpose(x_k_all, 1, 2)
+        y_k = torch.transpose(y_k, 1, 2)
+        #print(u_k.size())
+        #print((A @ x_k_1).size())
+        #print((B @ u_k).size())
+        #x_k_1 = A @ x_k_1 + B @ u_k
+        #y_k =  C @ x_k_1
+        #print(B.size())
+        #print(C.size())
+        #print("X_K_ALL")
+        #print(x_k_all)
+        #print("Y_KLLLSKDJFLKSDJFLKSDJ")
+        #print(y_k[0, 0 , :])
+        #print(y_k[0, len(y_k[0, :, 0]) - 1, :])
+        #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
+
+        #FIXME: is this sort of normalization even necessary????
+        #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
+
+        #ADD OBSERVATION NOISE
+        y_k += (torch.randn (y_k.size()[0], y_k.size()[1], y_k.size()[2]) / 6)
         #BELOW IS THE SCALING
         y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
         return y_k[:, :, 0]
