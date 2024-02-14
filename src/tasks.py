@@ -452,6 +452,15 @@ class KalmanFilter(Task):
             #print(B.size())
             #print((x_k_all[:, i:(i+1), :] @ A).size())
             #print((u_k[:, (i + 1):(i+2), :] @ B).size())
+            #print("THISSSSSSSSSSSSS")
+            #print(x_k_all[:, i:(i + 1), :])
+            #print("PART2")
+           #print(A)
+            #print(x_k_all[:, i:(i + 1), :] @ A)
+            #print("THATTTTTTTTTTTTT")
+            #print(u_k[:, (i + 1):(i + 2), :])
+            #print("part 2")
+            #print(B)
             x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B
         
         #print("\n\n\n\n\n\n\n\n")
@@ -468,36 +477,60 @@ class KalmanFilter(Task):
         #y_k =  C @ x_k_1
         #print(B.size())
         #print(C.size())
-        #print("y_k type: " + str(y_k.size()))
+        #print("X_K_ALL")
+        #print(x_k_all)
+        #print("Y_KLLLSKDJFLKSDJFLKSDJ")
+        #print(y_k[0, 0 , :])
+        #print(y_k[0, len(y_k[0, :, 0]) - 1, :])
         #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
 
         #FIXME: is this sort of normalization even necessary????
         #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
 
-        #FIXME: UNCOMMENT THE SCALING
-        #y_k = self.scale * y_k
+        #BELOW IS THE SCALING
+        y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
         return y_k[:, :, 0]
 
     @staticmethod
     def generate_rand_stable(batch_size, rows, cols, generator=None):
         ans = torch.zeros(batch_size, rows, cols)
+        #print("THIS IS THE GEN BATCH" + str(batch_size))
+        #print([i for i in range(batch_size)])
+    
         for i in range(batch_size):
+            #print(i)
+            #print("\n\n\n\n\n")
             e_vals = torch.rand(min(rows, cols), generator=generator)
             e_val_signs = torch.rand(min(rows, cols), generator=generator)
-            for i in range(len(e_vals)):
-                e_vals[i] *= -1 if (e_val_signs[i] < 0.5) else 1
+            for j in range(len(e_vals)):
+                e_vals[j] *= -1 if (e_val_signs[j] < 0.5) else 1
         
             gaus = torch.randn (rows, rows, generator=generator)
             svd = torch.linalg.svd (gaus)   
-            orth1 = svd[0] @ svd[2]
+            orth1 = svd[0]
             orth1 = orth1[:, :min(rows, cols)]
+            #print("THIS IS ORTH 1")
+            #print(orth1)
 
             gaus = torch.randn (cols, cols, generator=generator)
             svd = torch.linalg.svd (gaus)   
-            orth2 = svd[0] @ svd[2]
+            orth2 = svd[2]
             orth2 = orth2[:min(rows, cols), :]
+            #print("THIS IS ORTH 2")
+            #print(orth2)
 
-            ans[i] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
+            #print("NOOOOOOOOOOOOOOOO")
+            #print(torch.matmul(orth1, torch.diag(e_vals)))
+
+            #print("MUJHE TERRE LULLI")
+            #print(torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2))
+            ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
+            #print(i)
+            #print("\n\n\n\n\n")
+            #print(ans[i, :, :])
+
+        #print("IN GENERATING")
+        #print(ans)
         return ans
     
     # Assume that we are instantiating A, B, and C matrices for the following
