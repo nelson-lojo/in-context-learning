@@ -34,11 +34,11 @@ Note: If the conda environment is not automatically activated, you may need to r
 
 ### Training
 
-You can start training with:
+You can start training any pre-configured experiment by replacing `[task]` and `[architecture]` in the snippet below with your desired task and architecture. You can find an exhaustive list of pre-configured experiments at [src/conf/experiments/](https://github.com/nelson-lojo/in-context-learning/blob/main/src/conf/experiments/).
 
     ```
     cd src/
-    python train.py --config conf/experiments/any-task_relu.yml
+    python train.py --config conf/experiments/[task]_[architecture].yaml
     ```
 Note: We have implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper *and* with `L` (as described in the paper) equal to the number of tokens seen at a given sequence index (i.e. `index+1`).
 
