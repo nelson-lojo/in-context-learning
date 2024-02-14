@@ -1,0 +1,11 @@
+inherit:
+    - ../models/standard_relu.yaml
+    - ../tasks/noisy_kalman_filter.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: pretrained_relu
+
+wandb:
+    name: "noisy_kalman_filter_standard_relu"
