@@ -377,7 +377,6 @@ class KalmanFilter(Task):
         self.hidden_layer_size = hidden_layer_size
         self.curriculum = curriculum
     
-        #print(self.curriculum.n_points)
         if pool_dict is None and seeds is None:
             self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
             self.B = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
@@ -407,14 +406,7 @@ class KalmanFilter(Task):
             self.x_k_1 = pool_dict["x_k_1"][indices]
 
 
-    #Unsure if there's some normalization I must do 
-    #How would batch size work in this case?
     def evaluate(self, u_k):
-        # I do not know what this does
-        #print("A type: " + str(type(self.A)))
-        #print("B type: " + str(type(self.B)))
-        #print("C type: " + str(type(self.C)))
-        #print("x_k_1 type: " + str(type(self.x_k_1)))
 
         A = self.A.to(u_k.device)
         
@@ -424,69 +416,15 @@ class KalmanFilter(Task):
         
         x_k_1 = self.x_k_1.to(u_k.device)
         # Renormalize to Linear Regression Scale
-
-        #print("A type: " + str(type(A)))
-        #print(A)
-        #print("B type: " + str(type(B)))
-        #print(B)
-        ##print("C type: " + str(type(C)))
-        #print(C)
-        ##print("u_k type: " + str(type(u_k)))
-        #print(u_k)
-        #print("x_k_1 type: " + str(type(x_k_1)))
-        #print(x_k_1)
-        #print("\n\n\n\n\n\n\n")
-       # print("THESE ARE MY INPUTS")
-       # print("\n\n\n\n\n\n\n\n")
-        #print(u_k)
-       # print("\n\n\n\n\n\n\n\n")
-        #print(u_k.size())
         
-
         x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
         x_k_all[:, 0, :] = x_k_1[:, 0, :]
-        #print(x_k_all)
+
         for i in range(u_k.size()[1] - 1):
-            #print(x_k_all[:, i:(i+1), :].size())
-            #print(A.size())
-            #print( u_k[:, (i + 1):(i + 2), :].size())
-            #print(B.size())
-            #print((x_k_all[:, i:(i+1), :] @ A).size())
-            #print((u_k[:, (i + 1):(i+2), :] @ B).size())
-            #print("THISSSSSSSSSSSSS")
-            #print(x_k_all[:, i:(i + 1), :])
-            #print("PART2")
-           #print(A)
-            #print(x_k_all[:, i:(i + 1), :] @ A)
-            #print("THATTTTTTTTTTTTT")
-            #print(u_k[:, (i + 1):(i + 2), :])
-            #print("part 2")
-            #print(B)
             x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B
         
-        #print("\n\n\n\n\n\n\n\n")
-        #print(x_k_all)
-        ##print("AFTER FOR LOOP")
-        #print(x_k_all.size())
-        #print(C.size())
         y_k = C @ torch.transpose(x_k_all, 1, 2)
         y_k = torch.transpose(y_k, 1, 2)
-        #print(u_k.size())
-        #print((A @ x_k_1).size())
-        #print((B @ u_k).size())
-        #x_k_1 = A @ x_k_1 + B @ u_k
-        #y_k =  C @ x_k_1
-        #print(B.size())
-        #print(C.size())
-        #print("X_K_ALL")
-        #print(x_k_all)
-        #print("Y_KLLLSKDJFLKSDJFLKSDJ")
-        #print(y_k[0, 0 , :])
-        #print(y_k[0, len(y_k[0, :, 0]) - 1, :])
-        #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
-
-        #FIXME: is this sort of normalization even necessary????
-        #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
 
         #BELOW IS THE SCALING
         y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
@@ -495,12 +433,8 @@ class KalmanFilter(Task):
     @staticmethod
     def generate_rand_stable(batch_size, rows, cols, generator=None):
         ans = torch.zeros(batch_size, rows, cols)
-        #print("THIS IS THE GEN BATCH" + str(batch_size))
-        #print([i for i in range(batch_size)])
     
         for i in range(batch_size):
-            #print(i)
-            #print("\n\n\n\n\n")
             e_vals = torch.rand(min(rows, cols), generator=generator)
             e_val_signs = torch.rand(min(rows, cols), generator=generator)
             for j in range(len(e_vals)):
@@ -510,28 +444,14 @@ class KalmanFilter(Task):
             svd = torch.linalg.svd (gaus)   
             orth1 = svd[0]
             orth1 = orth1[:, :min(rows, cols)]
-            #print("THIS IS ORTH 1")
-            #print(orth1)
 
             gaus = torch.randn (cols, cols, generator=generator)
             svd = torch.linalg.svd (gaus)   
             orth2 = svd[2]
             orth2 = orth2[:min(rows, cols), :]
-            #print("THIS IS ORTH 2")
-            #print(orth2)
 
-            #print("NOOOOOOOOOOOOOOOO")
-            #print(torch.matmul(orth1, torch.diag(e_vals)))
-
-            #print("MUJHE TERRE LULLI")
-            #print(torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2))
             ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
-            #print(i)
-            #print("\n\n\n\n\n")
-            #print(ans[i, :, :])
-
-        #print("IN GENERATING")
-        #print(ans)
+            
         return ans
     
     # Assume that we are instantiating A, B, and C matrices for the following
@@ -578,9 +498,6 @@ class NoisyKalmanFilter(KalmanFilter):
         self.curriculum = curriculum
     
 
-
-    #Unsure if there's some normalization I must do 
-    #How would batch size work in this case?
     def evaluate(self, u_k):
 
         A = self.A.to(u_k.device)
@@ -592,68 +509,13 @@ class NoisyKalmanFilter(KalmanFilter):
         x_k_1 = self.x_k_1.to(u_k.device)
         # Renormalize to Linear Regression Scale
 
-        #print("A type: " + str(type(A)))
-        #print(A)
-        #print("B type: " + str(type(B)))
-        #print(B)
-        ##print("C type: " + str(type(C)))
-        #print(C)
-        ##print("u_k type: " + str(type(u_k)))
-        #print(u_k)
-        #print("x_k_1 type: " + str(type(x_k_1)))
-        #print(x_k_1)
-        #print("\n\n\n\n\n\n\n")
-       # print("THESE ARE MY INPUTS")
-       # print("\n\n\n\n\n\n\n\n")
-        #print(u_k)
-       # print("\n\n\n\n\n\n\n\n")
-        #print(u_k.size())
-        
-
         x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
         x_k_all[:, 0, :] = x_k_1[:, 0, :]
-        #print(x_k_all)
         for i in range(u_k.size()[1] - 1):
-            #print(x_k_all[:, i:(i+1), :].size())
-            #print(A.size())
-            #print( u_k[:, (i + 1):(i + 2), :].size())
-            #print(B.size())
-            #print((x_k_all[:, i:(i+1), :] @ A).size())
-            #print((u_k[:, (i + 1):(i+2), :] @ B).size())
-            #print("THISSSSSSSSSSSSS")
-            #print(x_k_all[:, i:(i + 1), :])
-            #print("PART2")
-           #print(A)
-            #print(x_k_all[:, i:(i + 1), :] @ A)
-            #print("THATTTTTTTTTTTTT")
-            #print(u_k[:, (i + 1):(i + 2), :])
-            #print("part 2")
-            #print(B)
             x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B + (torch.randn (u_k.size()[0], 1, u_k.size()[2]) / 5)
         
-        #print("\n\n\n\n\n\n\n\n")
-        #print(x_k_all)
-        ##print("AFTER FOR LOOP")
-        #print(x_k_all.size())
-        #print(C.size())
         y_k = C @ torch.transpose(x_k_all, 1, 2)
         y_k = torch.transpose(y_k, 1, 2)
-        #print(u_k.size())
-        #print((A @ x_k_1).size())
-        #print((B @ u_k).size())
-        #x_k_1 = A @ x_k_1 + B @ u_k
-        #y_k =  C @ x_k_1
-        #print(B.size())
-        #print(C.size())
-        #print("X_K_ALL")
-        #print(x_k_all)
-        #print("Y_KLLLSKDJFLKSDJFLKSDJ")
-        #print(y_k[0, 0 , :])
-        #print(y_k[0, len(y_k[0, :, 0]) - 1, :])
-        #FIXME: NOT SURE IF THIS IS THE RIGHT SPLICING TO DO!!!!!!!
-
-        #FIXME: is this sort of normalization even necessary????
-        #y_k = y_k * math.sqrt(2 / self.hidden_layer_size)
 
         #ADD OBSERVATION NOISE
         y_k += (torch.randn (y_k.size()[0], y_k.size()[1], y_k.size()[2]) / 6)
@@ -664,12 +526,8 @@ class NoisyKalmanFilter(KalmanFilter):
     @staticmethod
     def generate_rand_stable(batch_size, rows, cols, generator=None):
         ans = torch.zeros(batch_size, rows, cols)
-        #print("THIS IS THE GEN BATCH" + str(batch_size))
-        #print([i for i in range(batch_size)])
     
         for i in range(batch_size):
-            #print(i)
-            #print("\n\n\n\n\n")
             e_vals = torch.rand(min(rows, cols), generator=generator)
             e_val_signs = torch.rand(min(rows, cols), generator=generator)
             for j in range(len(e_vals)):
@@ -679,28 +537,14 @@ class NoisyKalmanFilter(KalmanFilter):
             svd = torch.linalg.svd (gaus)   
             orth1 = svd[0]
             orth1 = orth1[:, :min(rows, cols)]
-            #print("THIS IS ORTH 1")
-            #print(orth1)
 
             gaus = torch.randn (cols, cols, generator=generator)
             svd = torch.linalg.svd (gaus)   
             orth2 = svd[2]
             orth2 = orth2[:min(rows, cols), :]
-            #print("THIS IS ORTH 2")
-            #print(orth2)
-
-            #print("NOOOOOOOOOOOOOOOO")
-            #print(torch.matmul(orth1, torch.diag(e_vals)))
-
-            #print("MUJHE TERRE LULLI")
-            #print(torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2))
+            
             ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
-            #print(i)
-            #print("\n\n\n\n\n")
-            #print(ans[i, :, :])
 
-        #print("IN GENERATING")
-        #print(ans)
         return ans
     
     # Assume that we are instantiating A, B, and C matrices for the following
