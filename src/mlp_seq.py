@@ -32,6 +32,9 @@ class MLPSequence(nn.Module):
 
         super(MLPSequence, self).__init__()
 
+        self.name = f"MLP_n={context_len}"
+        self.sequence_model = False
+
         y_dim = 1
         x_dim = n_dims
         
