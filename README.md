@@ -42,6 +42,33 @@ You can start training any pre-configured experiment by replacing `[task]` and `
     ```
 Note: We have implemented ReLU-attention as described in the [ViT-relu](https://arxiv.org/pdf/2309.08586.pdf) paper *and* with `L` (as described in the paper) equal to the number of tokens seen at a given sequence index (i.e. `index+1`).
 
+#### New training runs
+
+You can specify a new training run by building a config file under `conf/experiments/` and using the appropriate imports. For example, to do training with the ReLU-attn transformer on the 2-layer NN task, you would produce the following:
+
+```yaml
+inherit:
+    - ../models/standard_relu.yaml
+    - ../tasks/relu_2nn_regression.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: pretrained_relu
+
+wandb:
+    name: "relu_2nn_regression_standard_relu"
+```
+
+#### New models
+
+For a new model, you would 
+1) Make the model accessible from calling `build_model(...)` in `models.py`. 
+2) Add any necessary values to `consts.py`
+3) Create a model config file in `conf/models/`
+4) Create a new training run as described above
+5) Run the training run as described above
+
 ## Additional Info
 
 - Written work:
