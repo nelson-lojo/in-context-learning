@@ -1,5 +1,5 @@
 inherit: 
-    - base.yaml
+    - ../base_train.yaml
 
 model:
     family: mlp
