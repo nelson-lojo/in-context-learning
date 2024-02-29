@@ -1,11 +1,17 @@
 from torch import nn
 import torch
 
-from typing import Optional
+from consts import NULL_CHK
+from typing import Literal
 
+def get_activation(act: str) -> nn.Module:
+    return {
+        "relu" : nn.ReLU,
+        "gelu" : nn.GELU,
+    }[act]()
 
 class MLP(nn.Module):
-    def __init__(self, activation=(lambda: nn.ReLU()), dimensions: list = [2,2,2]):
+    def __init__(self, activation: Literal['relu', 'gelu'] = "relu", dimensions: list = [2,2,2]):
         super(MLP, self).__init__()
 
         layers = [ ]
@@ -17,7 +23,7 @@ class MLP(nn.Module):
 
             last_dim = dim
             layers.append(
-                activation()
+                get_activation(activation)
             )
         layers = layers[:-1] # remove the extra activation
 
@@ -28,11 +34,13 @@ class MLP(nn.Module):
 
 class MLPSequence(nn.Module):
 
-    def __init__(self, n_dims=1, n_embd=2, n_layer=2, context_len=1, activation=(lambda: nn.ReLU()), dimensions: Optional[list] = None, **kwargs):
+    def __init__(self, n_dims=1, context_len=1, activation = 'relu', hidden_dimensions: list = [8, 8], **kwargs):
 
         super(MLPSequence, self).__init__()
 
-        self.name = f"MLP_n={context_len}"
+        NULL_CHK(n_dims, context_len, hidden_dimensions, activation)
+
+        self.name = f"MLP_ctx{context_len}_" + "_".join(map(str, hidden_dimensions))
         self.sequence_model = True
 
         y_dim = 1
@@ -40,12 +48,11 @@ class MLPSequence(nn.Module):
         
         self.n_dims = x_dim
         self.context_len = context_len
-
-        if dimensions is None:
-            # input dimension of current_x + context_len * (x_dim + y_dim)
-            dimensions = [x_dim + context_len * (x_dim + y_dim)] \
-                         + [n_embd] * n_layer \
-                         + [1]
+        
+        # input dimension of current_x + context_len * (x_dim + y_dim)
+        dimensions = [x_dim + context_len * (x_dim + y_dim)] \
+                        + hidden_dimensions \
+                        + [1]
 
         self.net = MLP(activation, dimensions)
 

@@ -1,5 +1,5 @@
 model:
     family: mlp
-    n_embd: 64
-    n_layer: 3
-    n_head: 2
+    hidden_dimensions: [128, 64]
+    context_len: 1
+    activation: "relu"
