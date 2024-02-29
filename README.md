@@ -8,12 +8,22 @@ Paper: http://arxiv.org/abs/2208.01066 <br><br>
 ## Getting started
 You can start by cloning the repo and following the steps below.
 
+
 1. Install the dependencies for our code using Conda. You may need to adjust the environment YAML file depending on your setup. *(we did not)*
 
     ```
     conda env create -f environment.yml
     conda activate in-context-learning
     ```
+
+    If you are trying to run the above lines in GitHub Codespaces and have created the environment.yml file but can't activate the in-context-learning environment, you may have to run the following:
+
+    ```
+    conda init zsh
+    zsh -l
+    ```
+
+    This names the shell to "zsh" then restarts it. Afterwards, you should be able to run "conda activate in-context-learning."
 
 2. Start training with:
 
