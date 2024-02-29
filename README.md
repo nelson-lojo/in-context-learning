@@ -23,7 +23,7 @@ You can start by cloning the repo and following the steps below.
     zsh -l
     ```
 
-    This names the shell to "zsh" then restarts it. Afterwards, you should be able to run "conda activate in-context-learning."
+    This adds the necessary binaries to your zsh path, then reloads the zsh shell. Afterwards, you should be able to run "conda activate in-context-learning."
 
 2. Start training with:
 
