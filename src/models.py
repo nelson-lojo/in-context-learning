@@ -87,6 +87,11 @@ def get_relevant_baselines(task_name):
             (LeastSquaresModel, {}),
             (NNModel, {"n_neighbors": 3}),
             (AveragingModel, {}),
+        ],
+        "noisy_kalman_filter": [
+            (LeastSquaresModel, {}),
+            (NNModel, {"n_neighbors": 3}),
+            (AveragingModel, {}),
         ]
     }
 
