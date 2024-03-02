@@ -11,7 +11,7 @@ from quinine import (
     nullable,
 )
 from funcy import merge
-from consts import SEQ_MODELS
+from consts import SEQ_MODELS, TASK_LIST
 
 model_schema = {
     "family": merge(tstring, allowed(SEQ_MODELS)),
@@ -34,15 +34,6 @@ curriculum_schema = {
     "points": stdict(curriculum_base_schema),
 }
 
-TASK_LIST = [
-    "linear_regression",
-    "sparse_linear_regression",
-    "linear_classification",
-    "relu_2nn_regression",
-    "decision_tree",
-    "kalman_filter",
-    "noisy_kalman_filter"
-]
 
 training_schema = {
     "task": merge(tstring, allowed(TASK_LIST)),
