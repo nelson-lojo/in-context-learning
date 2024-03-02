@@ -63,7 +63,6 @@ def get_task_sampler(
         "kalman_filter": KalmanFilter,
         "noisy_kalman_filter": NoisyKalmanFilter
     }
-    print(curriculum)
     if task_name in task_names_to_classes:
         task_cls = task_names_to_classes[task_name]
         if num_tasks is not None:
@@ -477,8 +476,6 @@ class NoisyKalmanFilter(KalmanFilter):
     ):
         """scale: a constant by which to scale the randomly sampled weights."""
         super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
-        self.scale = scale
-        self.hidden_layer_size = hidden_layer_size
     
 
     def evaluate(self, u_k):
