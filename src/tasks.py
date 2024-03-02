@@ -8,8 +8,6 @@ def squared_error(ys_pred, ys):
 
 
 def mean_squared_error(ys_pred, ys):
-    #print("ys_pred: " + str(ys_pred.size()))
-    #print("ys: " + str(ys.size()))
     return (ys - ys_pred).square().mean()
 
 
@@ -70,15 +68,9 @@ def get_task_sampler(
         task_cls = task_names_to_classes[task_name]
         if num_tasks is not None:
             if pool_dict is not None:
-                raise ValueError("Either pool_dict or num_tasks should be None.")
-            #print(task_name == "kalman_filter")
-            if task_name == "kalman_filter":
-                #print(curriculum)
-                pool_dict = KalmanFilter.generate_pool_dict(n_dims, num_tasks, **kwargs)
-                return lambda **args: KalmanFilter(n_dims, batch_size, pool_dict=pool_dict, **args, **kwargs)
-            else:    
+                raise ValueError("Either pool_dict or num_tasks should be None.")  
                 pool_dict = task_cls.generate_pool_dict(n_dims, num_tasks, **kwargs)
-        return (lambda **args: KalmanFilter(n_dims, batch_size, pool_dict, **args, **kwargs)) if task_name == "kalman_filter" else (lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs))
+        return lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs)
     else:
         print("Unknown task")
         raise NotImplementedError
@@ -104,13 +96,13 @@ class LinearRegression(Task):
             indices = torch.randperm(len(pool_dict["w"]))[:batch_size]
             self.w_b = pool_dict["w"][indices]
 
-    def evaluate(self, xs_b): # (bs, seq_len, x_dim)
+    def evaluate(self, xs_b):
         w_b = self.w_b.to(xs_b.device)
         ys_b = self.scale * (xs_b @ w_b)[:, :, 0]
         return ys_b
 
     @staticmethod
-    def generate_pool_dict(n_dims, num_tasks, **kwargs):  # ignore extra args
+    def generate_pool_dict(n_dims, num_tasks, **kwargs):
         return {"w": torch.randn(num_tasks, n_dims, 1)}
 
     @staticmethod
@@ -258,12 +250,7 @@ class Relu2nnRegression(Task):
     def evaluate(self, xs_b):
         W1 = self.W1.to(xs_b.device)
         W2 = self.W2.to(xs_b.device)
-        # Renormalize to Linear Regression Scale
-        print("xs_b size: " + str(xs_b.size()))
-        print("W1 size: " + str(W1.size()))
-        print("W2 size: " + str(W2.size()))
         ys_b_nn = (torch.nn.functional.relu(xs_b @ W1) @ W2)
-        print("ys_b_nn size: " + str(ys_b_nn.size()))
         ys_b_nn = (torch.nn.functional.relu(xs_b @ W1) @ W2)[:, :, 0]
         ys_b_nn = ys_b_nn * math.sqrt(2 / self.hidden_layer_size)
         ys_b_nn = self.scale * ys_b_nn
