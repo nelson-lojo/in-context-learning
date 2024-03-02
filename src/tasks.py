@@ -52,7 +52,7 @@ class Task:
 
 
 def get_task_sampler(
-    task_name, n_dims, batch_size, pool_dict=None, num_tasks=None, curriculum=None, **kwargs
+    task_name, n_dims, batch_size, pool_dict=None, num_tasks=None, **kwargs
 ):
     task_names_to_classes = {
         "linear_regression": LinearRegression,
@@ -74,11 +74,11 @@ def get_task_sampler(
             #print(task_name == "kalman_filter")
             if task_name == "kalman_filter":
                 #print(curriculum)
-                pool_dict = KalmanFilter.generate_pool_dict(n_dims, num_tasks, curriculum=curriculum, **kwargs)
-                return lambda **args: KalmanFilter(n_dims, batch_size, curriculum, pool_dict=pool_dict, **args, **kwargs)
+                pool_dict = KalmanFilter.generate_pool_dict(n_dims, num_tasks, **kwargs)
+                return lambda **args: KalmanFilter(n_dims, batch_size, pool_dict=pool_dict, **args, **kwargs)
             else:    
                 pool_dict = task_cls.generate_pool_dict(n_dims, num_tasks, **kwargs)
-        return (lambda **args: KalmanFilter(n_dims, batch_size, curriculum, pool_dict, **args, **kwargs)) if task_name == "kalman_filter" else (lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs))
+        return (lambda **args: KalmanFilter(n_dims, batch_size, pool_dict, **args, **kwargs)) if task_name == "kalman_filter" else (lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs))
     else:
         print("Unknown task")
         raise NotImplementedError
@@ -365,7 +365,6 @@ class KalmanFilter(Task):
         self,
         n_dims,
         batch_size,
-        curriculum,
         pool_dict=None,
         seeds=None,
         scale=1,
@@ -375,7 +374,6 @@ class KalmanFilter(Task):
         super(KalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
         self.scale = scale
         self.hidden_layer_size = hidden_layer_size
-        self.curriculum = curriculum
     
         if pool_dict is None and seeds is None:
             self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
@@ -463,7 +461,7 @@ class KalmanFilter(Task):
     # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
     # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
     @staticmethod
-    def generate_pool_dict(n_dims, num_tasks, curriculum=None, hidden_layer_size=100, **kwargs):
+    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=100, **kwargs):
         return {
             "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
             "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
@@ -485,17 +483,15 @@ class NoisyKalmanFilter(KalmanFilter):
         self,
         n_dims,
         batch_size,
-        curriculum,
         pool_dict=None,
         seeds=None,
         scale=1,
         hidden_layer_size=100,
     ):
         """scale: a constant by which to scale the randomly sampled weights."""
-        super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, curriculum, pool_dict, seeds)
+        super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
         self.scale = scale
         self.hidden_layer_size = hidden_layer_size
-        self.curriculum = curriculum
     
 
     def evaluate(self, u_k):
@@ -556,7 +552,7 @@ class NoisyKalmanFilter(KalmanFilter):
     # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
     # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
     @staticmethod
-    def generate_pool_dict(n_dims, num_tasks, curriculum=None, hidden_layer_size=100, **kwargs):
+    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=100, **kwargs):
         return {
             "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
             "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
