@@ -61,7 +61,6 @@ def train(model, args):
         n_dims,
         bsize,
         num_tasks=args.training.num_tasks,
-        curriculum=curriculum,
         **args.training.task_kwargs,
     )
     print(args.training.task)
@@ -89,10 +88,6 @@ def train(model, args):
         )
 
         task = task_sampler(**task_sampler_args)
-        #print ("ULTRA SHAPE: " + str(xs.size()))
-        #print("\n\n\n\n\n\n\n\n")
-        #print(xs)
-        #print("\n\n\n\n\n\n\n\n")
         ys = task.evaluate(xs)
 
         loss_func = task.get_training_metric()
