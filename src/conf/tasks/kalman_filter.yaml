@@ -1,0 +1,17 @@
+inherit: 
+    - ../wandb.yaml
+
+training:
+    task: kalman_filter
+    task_kwargs: {"hidden_layer_size": 100}
+    curriculum:
+        points:
+            start: 15
+            end: 20
+            inc: 1
+            interval: 2000
+
+out_dir: ../models/kalman_filter
+
+wandb:
+    name: "kalman_filter"
