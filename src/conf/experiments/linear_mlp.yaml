@@ -5,7 +5,7 @@ inherit:
     - ../base_curriculum.yaml
 
 training:
-    resume_id: mlp
+    resume_id: pretrained_mlp
 
 wandb:
     name: "linear_regression_mlp"

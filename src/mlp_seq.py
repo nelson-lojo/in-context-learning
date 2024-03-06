@@ -61,7 +61,7 @@ class MLPSequence(nn.Module):
         bsize, points, dim = xs_b.shape
         try:
             y_dim = ys_b.shape[2]
-        except IndexError as e:
+        except IndexError as _:
             y_dim = 1
         
         xy_seq = torch.cat(
@@ -70,12 +70,13 @@ class MLPSequence(nn.Module):
             axis=2
         )
 
-        contexted = [
-            torch.cat((torch.zeros(bsize, i, dim+y_dim), xy_seq[:, :-i,:]), axis=1)
-            for i in range(1, self.context_len + 1)
-        ]
+        combined_dim = dim + y_dim
+        contexted = torch.zeros(bsize, points, self.context_len * combined_dim)
 
-        return torch.cat(contexted + [xs_b], axis=-1) # returns (b_size, seq_len, x_dim + ctx_len * (x_dim + y_dim))
+        for i in range(1, min(points, self.context_len)):
+            contexted[:, i:, (i-1)*combined_dim:i*combined_dim] = xy_seq[:, :-i, :]
+
+        return torch.cat((contexted, xs_b), axis=-1) # returns (b_size, seq_len, x_dim + ctx_len * (x_dim + y_dim))
 
     def forward(self, xs, ys, inds=None):
         input = self._combine(xs, ys)
