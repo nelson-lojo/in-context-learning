@@ -69,7 +69,7 @@ def get_task_sampler(
         task_cls = task_names_to_classes[task_name]
         if num_tasks is not None:
             if pool_dict is not None:
-                raise ValueError("Either pool_dict or num_tasks should be None.")  
+                raise ValueError("Either pool_dict or num_tasks should be None.")
             pool_dict = task_cls.generate_pool_dict(n_dims, num_tasks, **kwargs)
         return lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs)
     else:
@@ -376,7 +376,7 @@ class KalmanFilter(Task):
                 for param_name, param_dims in self._dims.items()
             }
         elif pool_dict is None:
-            pool_dict = { param_name : KalmanFilter.generate_rand_stable(self.b_size, *param_dims) 
+            pool_dict = { param_name : KalmanFilter._generate_rand_stable(self.b_size, *param_dims) 
                           for param_name, param_dims in self._dims.items() }
 
         assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_0" in pool_dict
@@ -385,32 +385,37 @@ class KalmanFilter(Task):
         self.A = pool_dict["A"][indices]
         self.B = pool_dict["B"][indices]
         self.C = pool_dict["C"][indices]
-        self.x_k_1 = pool_dict["x_0"][indices]
+        self.x_0 = pool_dict["x_0"][indices]
 
 
     def evaluate(self, u_k):
+        b_size, seq_len, n_dim = u_k.shape
 
         A = self.A.to(u_k.device)
-        
         B = self.B.to(u_k.device)
-        
         C = self.C.to(u_k.device)
-        
-        x_k_1 = self.x_k_1.to(u_k.device)
+        x_0 = self.x_0.to(u_k.device)
         # Renormalize to Linear Regression Scale
-        
-        x_k_all = torch.zeros(u_k.size()[0], u_k.size()[1], u_k.size()[2], device=u_k.device)
-        x_k_all[:, 0, :] = x_k_1[:, 0, :]
 
-        for i in range(u_k.size()[1] - 1):
-            x_k_all[:, (i+1):(i + 2), :] = x_k_all[:, i:(i + 1), :] @ A + u_k[:, (i + 1):(i + 2), :] @ B
-        
-        y_k = C @ torch.transpose(x_k_all, 1, 2)
-        y_k = torch.transpose(y_k, 1, 2)
+        # produce a (b_size, hidden_size, seq_len) tensor
+        b_u = torch.bmm(B, u_k.transpose(1, 2))
+
+        x_all = [x_0[:, :, 0]]
+        for i in range(seq_len):
+            x_all.append(
+                (A @ x_all[i][..., None])[:, :, 0] # produces a (b_size, hidden_size) tensor
+                + b_u[..., i]
+            )
+
+        x_all = torch.stack(x_all, axis=1)
+        assert x_all.shape == (b_size, seq_len+1, self.hidden_layer_size)
+
+        y_k = C[:, None, ...] @ x_all[..., None] # produces a (bsize, seq_len+1, 1, 1) tensor
+        y_k = y_k[:, 1:, 0, 0]
 
         #BELOW IS THE SCALING
-        y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
-        return y_k[:, :, 0]
+        y_k = (1/math.sqrt(seq_len)) * y_k
+        return y_k
 
     @staticmethod
     def _generate_rand_stable(batch_size, rows, cols, generator=None):
@@ -442,7 +447,7 @@ class KalmanFilter(Task):
     #           x_k = A * x_(k-1) + B * u_k
     #           y_k = C * x_k
     #
-    # The propostition is to project the input signal u_k into a higher dimension 
+    # The proposition is to project the input signal u_k into a higher dimension 
     #   this means x_k is (hidden_layer_size, 1), u_k is in_dim, and y_k is (out_dim, 1),
     # A -> (hidden_layer_size, hidden_layer_size), B -> (hidden_layer_size, in_dim), C -> (out_dim, hidden_layer_size)
     @staticmethod
