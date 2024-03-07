@@ -361,34 +361,31 @@ class KalmanFilter(Task):
         super(KalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
         self.scale = scale
         self.hidden_layer_size = hidden_layer_size
-    
-        if pool_dict is None and seeds is None:
-            self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
-            self.B = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
-            self.C = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
-            self.x_k_1 = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
-        elif seeds is not None:
-            self.A = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
-            self.B = KalmanFilter.generate_rand_stable(self.b_size, self.n_dims, self.n_dims)
-            self.C = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
-            self.x_k_1 = KalmanFilter.generate_rand_stable(self.b_size, 1, self.n_dims)
+        self._dims = KalmanFilter._get_dims(self.n_dims, self.hidden_layer_size)
+
+        if seeds is not None:
             generator = torch.Generator()
             assert len(seeds) == self.b_size
-            for i, seed in enumerate(seeds):
-                generator.manual_seed(seed)
 
-                self.A[i] = KalmanFilter.generate_rand_stable(self.n_dims, self.n_dims, generator=generator)
-                self.B[i] = KalmanFilter.generate_rand_stable(self.n_dims, self.n_dims, generator=generator)
-                self.C[i] = KalmanFilter.generate_rand_stable(1, self.n_dims, generator=generator)
-                self.x_k_1[i] = KalmanFilter.generate_rand_stable(1, self.n_dims, generator=generator)
-        else:
-            assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_k_1" in pool_dict
-            assert len(pool_dict["A"]) == len(pool_dict["B"]) == len(pool_dict["C"]) == len(pool_dict["x_k_1"])
-            indices = torch.randperm(len(pool_dict["A"]))[:batch_size]
-            self.A = pool_dict["A"][indices]
-            self.B = pool_dict["B"][indices]
-            self.C = pool_dict["C"][indices]
-            self.x_k_1 = pool_dict["x_k_1"][indices]
+            pool_dict = {
+                # for each parameter name ...
+                param_name : torch.cat( [ # generate a batch of values ...
+                    KalmanFilter._generate_rand_stable(1, *param_dims, generator=generator.manual_seed(seed)) 
+                    for seed in seeds                              # ... each sampled from a different seed
+                ] )
+                for param_name, param_dims in self._dims.items()
+            }
+        elif pool_dict is None:
+            pool_dict = { param_name : KalmanFilter.generate_rand_stable(self.b_size, *param_dims) 
+                          for param_name, param_dims in self._dims.items() }
+
+        assert "A" in pool_dict and "B" in pool_dict and "C" in pool_dict and "x_0" in pool_dict
+        assert len(pool_dict["A"]) == len(pool_dict["B"]) == len(pool_dict["C"]) == len(pool_dict["x_0"])
+        indices = torch.randperm(len(pool_dict["A"]))[:self.b_size]
+        self.A = pool_dict["A"][indices]
+        self.B = pool_dict["B"][indices]
+        self.C = pool_dict["C"][indices]
+        self.x_k_1 = pool_dict["x_0"][indices]
 
 
     def evaluate(self, u_k):
@@ -416,7 +413,7 @@ class KalmanFilter(Task):
         return y_k[:, :, 0]
 
     @staticmethod
-    def generate_rand_stable(batch_size, rows, cols, generator=None):
+    def _generate_rand_stable(batch_size, rows, cols, generator=None):
         ans = torch.zeros(batch_size, rows, cols)
     
         for i in range(batch_size):
@@ -436,26 +433,34 @@ class KalmanFilter(Task):
             orth2 = orth2[:min(rows, cols), :]
 
             ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
-            
+
         return ans
-    
+
     # Assume that we are instantiating A, B, and C matrices for the following
     # state space model: 
     #
     #           x_k = A * x_(k-1) + B * u_k
     #           y_k = C * x_k
     #
-    # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
-    # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
+    # The propostition is to project the input signal u_k into a higher dimension 
+    #   this means x_k is (hidden_layer_size, 1), u_k is in_dim, and y_k is (out_dim, 1),
+    # A -> (hidden_layer_size, hidden_layer_size), B -> (hidden_layer_size, in_dim), C -> (out_dim, hidden_layer_size)
     @staticmethod
-    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=100, **kwargs):
+    def _get_dims(in_dim, hidden_size, out_dim=1):
         return {
-            "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
-            "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
-            "C": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims),
-            "x_k_1": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims)
+            "A"   : (hidden_size, hidden_size),
+            "B"   : (hidden_size,      in_dim),
+            "C"   : (    out_dim, hidden_size),
+            "x_0" : (hidden_size,     out_dim)
         }
 
+    @staticmethod
+    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=100, **kwargs):
+        dims = KalmanFilter._get_dims(n_dims, hidden_layer_size)
+        return {
+            param_name : KalmanFilter._generate_rand_stable(num_tasks, *param_dim)
+            for param_name, param_dim in dims.items()
+        }
 
     @staticmethod
     def get_metric():
@@ -476,8 +481,7 @@ class NoisyKalmanFilter(KalmanFilter):
         hidden_layer_size=100,
     ):
         """scale: a constant by which to scale the randomly sampled weights."""
-        super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds)
-    
+        super(NoisyKalmanFilter, self).__init__(n_dims, batch_size, pool_dict, seeds, scale, hidden_layer_size)
 
     def evaluate(self, u_k):
 
@@ -503,53 +507,3 @@ class NoisyKalmanFilter(KalmanFilter):
         #BELOW IS THE SCALING
         y_k = (1/math.sqrt(len(y_k[0, :, 0]))) * y_k
         return y_k[:, :, 0]
-
-    @staticmethod
-    def generate_rand_stable(batch_size, rows, cols, generator=None):
-        ans = torch.zeros(batch_size, rows, cols)
-    
-        for i in range(batch_size):
-            e_vals = torch.rand(min(rows, cols), generator=generator)
-            e_val_signs = torch.rand(min(rows, cols), generator=generator)
-            for j in range(len(e_vals)):
-                e_vals[j] *= -1 if (e_val_signs[j] < 0.5) else 1
-        
-            gaus = torch.randn (rows, rows, generator=generator)
-            svd = torch.linalg.svd (gaus)   
-            orth1 = svd[0]
-            orth1 = orth1[:, :min(rows, cols)]
-
-            gaus = torch.randn (cols, cols, generator=generator)
-            svd = torch.linalg.svd (gaus)   
-            orth2 = svd[2]
-            orth2 = orth2[:min(rows, cols), :]
-            
-            ans[i, :, :] = torch.matmul(torch.matmul(orth1, torch.diag(e_vals)), orth2)
-
-        return ans
-    
-    # Assume that we are instantiating A, B, and C matrices for the following
-    # state space model: 
-    #
-    #           x_k = A * x_(k-1) + B * u_k
-    #           y_k = C * x_k
-    #
-    # If x_k is (n_dims, 1), u_k is scalar, and y_k is (hidden_layer_size, 1),
-    # A -> (n_dims, n_dims), B -> (n_dims, 1), C -> (hidden_layer_size, n_dims)
-    @staticmethod
-    def generate_pool_dict(n_dims, num_tasks, hidden_layer_size=100, **kwargs):
-        return {
-            "A": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
-            "B": KalmanFilter.generate_rand_stable(num_tasks, n_dims, n_dims),
-            "C": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims),
-            "x_k_1": KalmanFilter.generate_rand_stable(num_tasks, 1, n_dims)
-        }
-
-
-    @staticmethod
-    def get_metric():
-        return squared_error
-
-    @staticmethod
-    def get_training_metric():
-        return mean_squared_error
