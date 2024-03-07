@@ -2,6 +2,8 @@ import math
 
 import torch
 
+from models import throw
+
 
 def squared_error(ys_pred, ys):
     return (ys - ys_pred).square()
@@ -68,7 +70,7 @@ def get_task_sampler(
         if num_tasks is not None:
             if pool_dict is not None:
                 raise ValueError("Either pool_dict or num_tasks should be None.")  
-                pool_dict = task_cls.generate_pool_dict(n_dims, num_tasks, **kwargs)
+            pool_dict = task_cls.generate_pool_dict(n_dims, num_tasks, **kwargs)
         return lambda **args: task_cls(n_dims, batch_size, pool_dict, **args, **kwargs)
     else:
         print("Unknown task")
@@ -249,7 +251,6 @@ class Relu2nnRegression(Task):
     def evaluate(self, xs_b):
         W1 = self.W1.to(xs_b.device)
         W2 = self.W2.to(xs_b.device)
-        ys_b_nn = (torch.nn.functional.relu(xs_b @ W1) @ W2)
         ys_b_nn = (torch.nn.functional.relu(xs_b @ W1) @ W2)[:, :, 0]
         ys_b_nn = ys_b_nn * math.sqrt(2 / self.hidden_layer_size)
         ys_b_nn = self.scale * ys_b_nn
