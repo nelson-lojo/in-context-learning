@@ -1,0 +1,11 @@
+inherit: 
+    - ../models/mlp.yaml
+    - ../tasks/linear_regression.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: pretrained_mlp
+
+wandb:
+    name: "linear_regression_mlp"

@@ -1,0 +1,5 @@
+model:
+    family: mlp
+    hidden_dimensions: [128, 64]
+    context_len: 1
+    activation: "relu"

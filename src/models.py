@@ -9,8 +9,9 @@ from sklearn import tree
 import xgboost as xgb
 
 from base_models import NeuralNetwork, ParallelNetworks
+from mlp_seq import MLPSequence
 
-from consts import DEVICE
+from consts import DEVICE, NULL_CHK
 
 def throw(ex):
     raise ex
@@ -20,6 +21,7 @@ def build_model(conf):
         "gpt2" : TransformerModel,
         "relu_attn" : TransformerRelu,
         "relu_attn_causal" : TransformerReluCausal,
+        "mlp" : MLPSequence,
     }.get(
         conf.family,
         lambda *_, **__: throw(
@@ -27,13 +29,7 @@ def build_model(conf):
         )
     )
 
-    model = cls(
-        n_dims=conf.n_dims,
-        n_positions=conf.n_positions,
-        n_embd=conf.n_embd,
-        n_layer=conf.n_layer,
-        n_head=conf.n_head,
-    )
+    model = cls(**conf)
 
     return model
 
@@ -100,8 +96,11 @@ def get_relevant_baselines(task_name):
 
 
 class TransformerModel(nn.Module):
-    def __init__(self, n_dims, n_positions, n_embd=128, n_layer=12, n_head=4):
+    def __init__(self, n_dims, n_positions, n_embd=128, n_layer=12, n_head=4, **kwargs):
         super(TransformerModel, self).__init__()
+
+        NULL_CHK(n_dims, n_positions, n_embd, n_layer, n_head)
+
         configuration = GPT2Config(
             n_positions=2 * n_positions,
             n_embd=n_embd,

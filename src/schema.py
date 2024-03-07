@@ -5,6 +5,7 @@ from quinine import (
     tboolean,
     stdict,
     tdict,
+    tlist,
     default,
     required,
     allowed,
@@ -15,11 +16,14 @@ from consts import SEQ_MODELS, TASK_LIST
 
 model_schema = {
     "family": merge(tstring, allowed(SEQ_MODELS)),
-    "n_positions": merge(tinteger, required),  # maximum context length
-    "n_dims": merge(tinteger, required),  # latent dimension
-    "n_embd": merge(tinteger, required),
-    "n_layer": merge(tinteger, required),
-    "n_head": merge(tinteger, required),
+    "n_positions": merge(tinteger, nullable, default(None)),  # maximum context length
+    "n_dims": merge(tinteger, nullable, default(None)),  # latent dimension
+    "n_embd": merge(tinteger, nullable, default(None)),
+    "n_layer": merge(tinteger, nullable, default(None)),
+    "n_head": merge(tinteger, nullable, default(None)),
+    "context_len" : merge(tinteger, nullable, default(None)),
+    "hidden_dimensions" : merge(tlist, nullable, default(None)),
+    "activation" : merge(tstring, nullable, default(None))
 }
 
 curriculum_base_schema = {
