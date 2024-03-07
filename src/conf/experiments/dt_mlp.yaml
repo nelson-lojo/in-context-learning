@@ -1,0 +1,11 @@
+inherit: 
+    - ../models/mlp.yaml
+    - ../tasks/decision_tree.yaml
+    - ../base_train.yaml
+    - ../base_curriculum.yaml
+
+training:
+    resume_id: mlp
+
+wandb:
+    name: "decision_tree_mlp"
